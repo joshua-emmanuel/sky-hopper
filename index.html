@@ -1,0 +1,3439 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Sky Hopper — start.ng</title>
+    <link rel="stylesheet" href="./tailwind.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Pinned Three.js v0.160.0 via importmap (no build step required) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+      }
+    </script>
+
+    <style>
+      :root {
+        --font-display: "Fredoka", sans-serif;
+        --font-sans: "Inter", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+        font-family: var(--font-sans);
+        background: #0f172a;
+        color: #f8fafc;
+      }
+
+      .font-display {
+        font-family: var(--font-display);
+      }
+
+      #game-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        z-index: 1;
+        touch-action: none;
+      }
+
+      /* Glassmorphism UI panels */
+      .glass-panel {
+        background: rgba(15, 23, 42, 0.78);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+      }
+
+      .glass-pill {
+        background: rgba(15, 23, 42, 0.68);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+      }
+
+      /* Arcade 3D button press feel */
+      .btn-arcade {
+        transition:
+          transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+          box-shadow 0.12s ease,
+          filter 0.12s ease;
+      }
+      .btn-arcade:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.06);
+      }
+      .btn-arcade:active {
+        transform: translateY(2px);
+      }
+
+      /* Floating score popup animation */
+      @keyframes floatUpFade {
+        0% {
+          opacity: 1;
+          transform: translate(-50%, 0) scale(0.85);
+        }
+        30% {
+          opacity: 1;
+          transform: translate(-50%, -18px) scale(1.1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -48px) scale(0.95);
+        }
+      }
+      .score-popup {
+        position: fixed;
+        pointer-events: none;
+        z-index: 30;
+        font-family: var(--font-display);
+        font-weight: 700;
+        animation: floatUpFade 0.95s ease-out forwards;
+        text-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+      }
+
+      .hud-safe {
+        padding-top: max(0.75rem, env(safe-area-inset-top));
+        padding-left: max(0.75rem, env(safe-area-inset-left));
+        padding-right: max(0.75rem, env(safe-area-inset-right));
+      }
+      #touch-controls {
+        bottom: max(1rem, env(safe-area-inset-bottom));
+        padding-left: max(1.25rem, env(safe-area-inset-left));
+        padding-right: max(1.25rem, env(safe-area-inset-right));
+      }
+      button,
+      select {
+        min-height: 44px;
+      }
+      #touch-controls button {
+        opacity: 0.25;
+        touch-action: none;
+      }
+      #menu-screen,
+      #gameover-screen,
+      #howtoplay-modal {
+        padding-top: max(1rem, env(safe-area-inset-top));
+        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+      }
+      #howtoplay-modal > div {
+        max-height: 88dvh;
+      }
+      #gameover-screen {
+        overflow-y: auto;
+      }
+      #gameover-screen > div {
+        max-height: calc(100dvh - 2rem);
+        overflow-y: auto;
+        margin-top: auto;
+        margin-bottom: auto;
+      }
+      @media (max-width: 400px) {
+        header {
+          flex-wrap: wrap;
+          align-items: flex-start;
+        }
+        #player-badge {
+          padding: 0.4rem 0.55rem;
+        }
+        #hud-score-panel {
+          order: 3;
+          position: fixed;
+          top: 4.6rem;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 0.3rem 0.7rem;
+          gap: 0.65rem;
+        }
+        #hud-live-score {
+          font-size: 1.25rem;
+        }
+        #hud-live-hearts {
+          font-size: 1.1rem;
+        }
+      }
+
+      /* Custom scrollbar for modals/drawers */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.4);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.4);
+        border-radius: 9999px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Three.js 3D Viewport -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Floating Popup Container -->
+    <div
+      id="popup-layer"
+      class="fixed inset-0 pointer-events-none z-30 overflow-hidden"
+    ></div>
+
+    <!-- Top Navigation & Live HUD Bar -->
+    <header
+      class="fixed top-0 left-0 right-0 z-20 p-3 sm:p-4 flex items-center justify-between gap-2 pointer-events-none hud-safe"
+    >
+      <!-- Left: Player Identity Badge & Best Score -->
+      <div class="flex items-center gap-2 pointer-events-auto">
+        <div
+          id="player-badge"
+          class="glass-pill rounded-2xl px-3.5 py-2 flex items-center gap-2.5 shadow-lg"
+        >
+          <span
+            id="player-swatch"
+            class="w-3.5 h-3.5 rounded-full border border-white/40 inline-block shrink-0"
+            style="background: #ff6b6b"
+          ></span>
+          <div class="text-xs sm:text-sm leading-tight">
+            <div class="flex items-center gap-1.5">
+              <span id="hud-player-name" class="font-semibold text-white"
+                >Guest</span
+              >
+              <span
+                id="hud-auth-tag"
+                class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-300 font-medium"
+                >Guest</span
+              >
+            </div>
+            <div class="text-[11px] text-slate-300">
+              Best:
+              <span id="hud-best-score" class="font-bold text-amber-300"
+                >0</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Live Score Display (visible during gameplay) -->
+      <div
+        id="hud-score-panel"
+        class="hidden glass-pill rounded-2xl px-5 py-1.5 text-center shadow-lg flex items-center gap-4"
+      >
+        <div>
+          <div
+            class="text-[10px] uppercase tracking-widest text-sky-300 font-semibold"
+          >
+            Score
+          </div>
+          <div
+            id="hud-live-score"
+            class="font-display text-2xl sm:text-3xl font-bold text-white tracking-wide"
+          >
+            0
+          </div>
+        </div>
+        <div class="h-7 w-px bg-white/15"></div>
+        <div>
+          <div
+            class="text-[10px] uppercase tracking-widest text-rose-300 font-semibold"
+          >
+            Hearts
+          </div>
+          <div
+            id="hud-live-hearts"
+            class="font-display text-xl sm:text-2xl font-bold text-rose-400 tracking-wide transition-transform duration-200"
+          >
+            ❤️ 0
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Utility Buttons (Sound, How to Play, Menu) -->
+      <div class="flex items-center gap-2 pointer-events-auto">
+        <button
+          id="btn-sound"
+          type="button"
+          title="Toggle Sound Effects"
+          class="glass-pill btn-arcade rounded-xl p-2.5 text-slate-200 hover:text-white focus:outline-none"
+        >
+          <!-- Speaker On Icon -->
+          <svg
+            id="icon-sound-on"
+            class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11 5L6 9H2v6h4l5 4V5z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"
+            />
+          </svg>
+          <!-- Speaker Off Icon -->
+          <svg
+            id="icon-sound-off"
+            class="w-5 h-5 hidden text-rose-400"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6"
+            />
+          </svg>
+        </button>
+
+        <button
+          id="btn-howtoplay"
+          type="button"
+          class="glass-pill btn-arcade rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-sky-300 hover:text-white flex items-center gap-1.5"
+        >
+          <svg
+            class="w-4 h-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span class="hidden sm:inline">How to Play</span>
+        </button>
+
+        <button
+          id="btn-back-menu"
+          type="button"
+          class="hidden glass-pill btn-arcade rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold text-amber-300 hover:text-white"
+        >
+          Menu
+        </button>
+      </div>
+    </header>
+
+    <!-- MAIN MENU & CHARACTER SHOWCASE OVERLAY -->
+    <main
+      id="menu-screen"
+      class="fixed inset-0 z-10 flex flex-col justify-between p-4 sm:p-6 pointer-events-none overflow-y-auto"
+    >
+      <!-- Top Spacer for Header -->
+      <div class="h-12 shrink-0"></div>
+
+      <!-- Middle Layout: Left Hero Card + Center 3D Character Inspection Hint + Right Leaderboard -->
+      <div
+        class="my-auto w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center"
+      >
+        <!-- Left Column: Game Title, Player Profile Card, and Action Buttons -->
+        <section
+          class="lg:col-span-5 glass-panel rounded-3xl p-5 sm:p-6 pointer-events-auto"
+        >
+          <div
+            class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/20 border border-sky-400/30 text-sky-300 text-xs font-semibold mb-3"
+          >
+            <span>☁️ 3D Sky Platformer</span>
+            <span>•</span>
+            <span>Endless Arcade</span>
+          </div>
+
+          <h1
+            class="font-display text-4xl sm:text-5xl font-bold tracking-tight text-white mb-2"
+          >
+            Sky
+            <span
+              class="text-transparent bg-clip-text bg-linear-to-r from-amber-300 via-orange-400 to-rose-400"
+              >Hopper</span
+            >
+          </h1>
+          <p class="text-slate-300 text-xs sm:text-sm leading-relaxed mb-4">
+            Leap across floating sky islands, ride boost springs, and collect
+            glowing <strong class="text-rose-300">Hearts</strong> for extra
+            revives, plus golden score orbs for bonus points!
+          </p>
+
+          <!-- Dynamic Player Status Card -->
+          <div
+            id="auth-card"
+            class="rounded-2xl bg-slate-900/75 border border-white/10 p-4 mb-4"
+          >
+            <div
+              id="auth-greeting"
+              class="font-display text-lg text-white font-semibold mb-1"
+            >
+              Welcome, Hopper!
+            </div>
+            <p id="auth-subtext" class="text-xs text-slate-300 leading-relaxed">
+              Ready to take on the sky islands.
+            </p>
+
+            <!-- Current Active Look Pills -->
+            <div
+              class="mt-3 pt-3 border-t border-white/10 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300"
+            >
+              <span class="text-slate-400 font-medium mr-1"
+                >Equipped Look:</span
+              >
+              <span
+                id="style-pill-colors"
+                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800 border border-white/10"
+              >
+                <span
+                  id="dot-primary"
+                  class="w-2.5 h-2.5 rounded-full inline-block"
+                ></span>
+                <span
+                  id="dot-secondary"
+                  class="w-2.5 h-2.5 rounded-full inline-block"
+                ></span>
+                <span
+                  id="dot-skin"
+                  class="w-2.5 h-2.5 rounded-full inline-block"
+                ></span>
+              </span>
+              <span
+                id="style-pill-hat"
+                class="px-2 py-0.5 rounded-full bg-slate-800 border border-white/10"
+                >Hat: cap</span
+              >
+              <span
+                id="style-pill-accessory"
+                class="px-2 py-0.5 rounded-full bg-slate-800 border border-white/10"
+                >Acc: backpack</span
+              >
+            </div>
+          </div>
+
+          <!-- Primary Action Buttons (dynamically toggled per auth state) -->
+          <div
+            id="auth-buttons-container"
+            class="flex flex-col sm:flex-row gap-2.5 mb-3"
+          >
+            <!-- Sign in with start.ng button (shown when START_NG !== null and not signed in) -->
+            <button
+              id="btn-signin-startng"
+              type="button"
+              class="hidden flex-1 btn-arcade rounded-2xl bg-linear-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-display font-semibold text-base py-3 px-4 shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"
+                />
+              </svg>
+              <span>Sign in with start.ng</span>
+            </button>
+
+            <!-- Play button ("Play as guest" when signed out, or "Play as <Name>" when signed in) -->
+            <button
+              id="btn-play-game"
+              type="button"
+              class="flex-1 btn-arcade rounded-2xl bg-linear-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-display font-bold text-base py-3 px-5 shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2"
+            >
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
+                />
+              </svg>
+              <span id="btn-play-label">Play as guest</span>
+            </button>
+          </div>
+
+          <!-- Controls Quick Summary -->
+          <div
+            class="flex items-center justify-between text-xs text-slate-400 bg-slate-900/50 rounded-xl px-3.5 py-2 border border-white/5"
+          >
+            <span
+              >Steer: <strong class="text-slate-200">← / →</strong> or
+              <strong class="text-slate-200">A / D</strong></span
+            >
+            <span
+              >Revive:
+              <strong class="text-rose-300">❤️ Auto-Used on Fall</strong></span
+            >
+          </div>
+
+          <!-- Collapsible Character Wardrobe Drawer -->
+          <div class="mt-3 pt-3 border-t border-white/10">
+            <button
+              id="btn-toggle-demo"
+              type="button"
+              class="w-full flex items-center justify-between text-xs font-semibold text-amber-300/90 hover:text-amber-200 py-1"
+            >
+              <span class="flex items-center gap-1.5">
+                <span>👕 Customize Character Outfit</span>
+              </span>
+              <span id="demo-chevron" class="transition-transform duration-200"
+                >▼</span
+              >
+            </button>
+
+            <div
+              id="demo-drawer"
+              class="hidden mt-2.5 space-y-2.5 bg-slate-950/70 rounded-2xl p-3.5 border border-amber-400/20 text-xs"
+            >
+              <p class="text-[11px] text-slate-400 leading-snug">
+                Personalize your Hopper's hat, accessory, and colors before
+                jumping in:
+              </p>
+
+              <!-- Hat & Accessory Selectors -->
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label
+                    for="demo-hat"
+                    class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1"
+                    >Hat</label
+                  >
+                  <select
+                    id="demo-hat"
+                    class="w-full bg-slate-900 border border-white/15 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-sky-400"
+                  >
+                    <option value="none">None</option>
+                    <option value="cap">Cap</option>
+                    <option value="beanie">Beanie</option>
+                    <option value="tophat">Top Hat</option>
+                    <option value="crown">Royal Crown</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    for="demo-accessory"
+                    class="block text-[10px] uppercase tracking-wider text-slate-400 mb-1"
+                    >Accessory</label
+                  >
+                  <select
+                    id="demo-accessory"
+                    class="w-full bg-slate-900 border border-white/15 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-sky-400"
+                  >
+                    <option value="none">None</option>
+                    <option value="glasses">Cool Glasses</option>
+                    <option value="scarf">Cozy Scarf</option>
+                    <option value="backpack">Explorer Pack</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Color Pickers -->
+              <div class="grid grid-cols-3 gap-2 pt-1">
+                <label
+                  class="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-white/10 cursor-pointer"
+                >
+                  <input
+                    id="demo-primary"
+                    type="color"
+                    value="#ff6b6b"
+                    class="w-5 h-5 rounded bg-transparent border-0 cursor-pointer"
+                  />
+                  <span class="text-[11px] text-slate-300">Outfit</span>
+                </label>
+                <label
+                  class="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-white/10 cursor-pointer"
+                >
+                  <input
+                    id="demo-secondary"
+                    type="color"
+                    value="#2b2f4a"
+                    class="w-5 h-5 rounded bg-transparent border-0 cursor-pointer"
+                  />
+                  <span class="text-[11px] text-slate-300">Accent</span>
+                </label>
+                <label
+                  class="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-white/10 cursor-pointer"
+                >
+                  <input
+                    id="demo-skin"
+                    type="color"
+                    value="#8d5524"
+                    class="w-5 h-5 rounded bg-transparent border-0 cursor-pointer"
+                  />
+                  <span class="text-[11px] text-slate-300">Skin</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Center Column: 3D Character Inspection Viewport Space -->
+        <section
+          class="lg:col-span-3 flex flex-col items-center justify-end h-44 sm:h-64 lg:h-80 pointer-events-none"
+        >
+          <div
+            class="glass-pill rounded-full px-3.5 py-1 text-[11px] text-slate-300 flex items-center gap-1.5 shadow-md"
+          >
+            <span>🔄 Drag anywhere to spin your 3D Hopper</span>
+          </div>
+        </section>
+
+        <!-- Right Column: Leaderboard Card -->
+        <section
+          class="lg:col-span-4 glass-panel rounded-3xl p-5 sm:p-6 pointer-events-auto"
+        >
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🏆</span>
+              <h2 class="font-display text-xl font-bold text-white">
+                Hall of Fame
+              </h2>
+            </div>
+            <button
+              id="btn-clear-scores"
+              type="button"
+              title="Reset leaderboard"
+              class="text-[11px] text-slate-400 hover:text-rose-300 transition-colors"
+            >
+              Reset
+            </button>
+          </div>
+          <p class="text-xs text-slate-400 mb-3">
+            Highest sky runs and personal records achieved by top Hoppers.
+          </p>
+
+          <div
+            id="leaderboard-list"
+            class="space-y-2 max-h-60 overflow-y-auto pr-1"
+          >
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+      </div>
+
+      <!-- Bottom Spacer -->
+      <div class="h-4 shrink-0"></div>
+    </main>
+
+    <!-- ON-SCREEN TOUCH CONTROLS (Visible during gameplay) -->
+    <div
+      id="touch-controls"
+      class="hidden fixed bottom-5 left-0 right-0 z-20 px-5 flex items-center justify-between pointer-events-none"
+    >
+      <button
+        id="btn-touch-left"
+        type="button"
+        aria-label="Steer Left"
+        class="pointer-events-auto glass-pill btn-arcade w-20 h-20 sm:w-24 sm:h-24 rounded-3xl flex items-center justify-center text-white active:scale-95 shadow-xl border border-white/20"
+      >
+        <svg
+          class="w-10 h-10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+      </button>
+
+      <button
+        id="btn-touch-right"
+        type="button"
+        aria-label="Steer Right"
+        class="pointer-events-auto glass-pill btn-arcade w-20 h-20 sm:w-24 sm:h-24 rounded-3xl flex items-center justify-center text-white active:scale-95 shadow-xl border border-white/20"
+      >
+        <svg
+          class="w-10 h-10"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M9 5l7 7-7 7"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <!-- GAME OVER OVERLAY -->
+    <div
+      id="gameover-screen"
+      class="hidden fixed inset-0 z-20 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+    >
+      <div
+        class="glass-panel rounded-3xl p-6 sm:p-7 w-full max-w-md text-center animate-fade-in"
+      >
+        <div
+          id="new-record-banner"
+          class="hidden inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-300/40 text-amber-300 text-xs font-bold mb-2"
+        >
+          <span>🎉 NEW PERSONAL BEST!</span>
+        </div>
+
+        <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-1">
+          Sky Run Complete!
+        </h2>
+        <p id="gameover-player-line" class="text-xs text-slate-300 mb-5">
+          Piloted by Guest
+        </p>
+
+        <div class="grid grid-cols-2 gap-3 mb-5">
+          <div class="rounded-2xl bg-slate-900/80 border border-white/10 p-3.5">
+            <div
+              class="text-[11px] uppercase tracking-wider text-sky-300 font-semibold mb-0.5"
+            >
+              Final Score
+            </div>
+            <div
+              id="gameover-score"
+              class="font-display text-3xl font-bold text-white"
+            >
+              0
+            </div>
+          </div>
+          <div class="rounded-2xl bg-slate-900/80 border border-white/10 p-3.5">
+            <div
+              class="text-[11px] uppercase tracking-wider text-amber-300 font-semibold mb-0.5"
+            >
+              Personal Best
+            </div>
+            <div
+              id="gameover-best"
+              class="font-display text-3xl font-bold text-amber-300"
+            >
+              0
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Top Leaderboard -->
+        <div class="text-left mb-5">
+          <div
+            class="text-xs font-semibold text-slate-300 mb-2 flex items-center justify-between"
+          >
+            <span>🏆 Top Hoppers</span>
+            <span class="text-[11px] text-slate-400"
+              >Press Space to Hop Again</span
+            >
+          </div>
+          <div id="gameover-leaderboard" class="space-y-1.5"></div>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            id="btn-gameover-menu"
+            type="button"
+            class="btn-arcade flex-1 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-display font-semibold py-3 px-4 border border-white/10"
+          >
+            Main Menu
+          </button>
+          <button
+            id="btn-play-again"
+            type="button"
+            class="btn-arcade flex-1 rounded-2xl bg-linear-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-display font-bold py-3 px-5 shadow-lg shadow-emerald-500/25"
+          >
+            Hop Again ↻
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HOW TO PLAY GUIDE MODAL -->
+    <div
+      id="howtoplay-modal"
+      class="hidden fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md"
+    >
+      <div
+        class="glass-panel rounded-3xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden"
+      >
+        <div
+          class="flex items-center justify-between px-6 py-4 border-b border-white/10"
+        >
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">🎮</span>
+            <h2 class="font-display text-xl font-bold text-white">
+              How to Play Sky Hopper
+            </h2>
+          </div>
+          <button
+            id="btn-close-howtoplay"
+            type="button"
+            class="rounded-xl p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div
+          class="p-6 overflow-y-auto space-y-5 text-xs sm:text-sm text-slate-300 leading-relaxed"
+        >
+          <!-- Section 1: Core Controls -->
+          <div class="rounded-2xl bg-slate-900/70 border border-white/10 p-4">
+            <h3
+              class="font-display text-base font-bold text-white mb-1.5 flex items-center gap-2"
+            >
+              <span>🕹️</span>
+              <span>Controls &amp; Sky Wrapping</span>
+            </h3>
+            <p class="mb-2">
+              Your Hopper automatically bounces upward every time you land on an
+              island. Your goal is to climb as high as possible without falling
+              below the clouds!
+            </p>
+            <ul class="list-disc pl-5 space-y-1 text-slate-300">
+              <li>
+                <strong class="text-white">Desktop:</strong> Hold
+                <kbd
+                  class="px-1.5 py-0.5 rounded bg-slate-800 border border-white/15 text-sky-300 text-xs"
+                  >←</kbd
+                >
+                /
+                <kbd
+                  class="px-1.5 py-0.5 rounded bg-slate-800 border border-white/15 text-sky-300 text-xs"
+                  >→</kbd
+                >
+                or
+                <kbd
+                  class="px-1.5 py-0.5 rounded bg-slate-800 border border-white/15 text-sky-300 text-xs"
+                  >A</kbd
+                >
+                /
+                <kbd
+                  class="px-1.5 py-0.5 rounded bg-slate-800 border border-white/15 text-sky-300 text-xs"
+                  >D</kbd
+                >
+                to steer left and right in mid-air.
+              </li>
+              <li>
+                <strong class="text-white">Mobile / Touch:</strong> Use the hold
+                the left or right half of the screen (or use the faint arrow
+                hints).
+              </li>
+              <li>
+                <strong class="text-white">Screen Wrap:</strong> Flying off the
+                far-left edge wraps you smoothly around to the far-right edge
+                (and vice versa)—use this to reach distant islands!
+              </li>
+            </ul>
+          </div>
+
+          <!-- Section 2: Hearts & Instant Revive -->
+          <div class="rounded-2xl bg-rose-950/35 border border-rose-400/25 p-4">
+            <h3
+              class="font-display text-base font-bold text-rose-300 mb-1.5 flex items-center gap-2"
+            >
+              <span>❤️</span>
+              <span>Hearts &amp; Instant Revive</span>
+            </h3>
+            <p class="mb-2">
+              Keep an eye out for glowing
+              <strong class="text-rose-300">3D Hearts</strong> floating above
+              islands:
+            </p>
+            <ul class="list-disc pl-5 space-y-1 text-slate-200">
+              <li>
+                <strong class="text-white">Double Reward:</strong> Every Heart
+                you collect grants
+                <strong class="text-rose-300">+1 ❤️ revive</strong>. Hearts do
+                not add score, and you can hold up to 3.
+              </li>
+              <li>
+                <strong class="text-white">Automatic Second Chance:</strong> If
+                you miss a jump and fall while holding at least 1 Heart, you
+                <strong class="text-emerald-300">revive immediately</strong>!
+                One Heart is spent to summon a rescue boost that launches you
+                right back into the action.
+              </li>
+            </ul>
+          </div>
+
+          <div
+            class="rounded-2xl bg-amber-950/35 border border-amber-400/25 p-4"
+          >
+            <h3 class="font-display text-base font-bold text-amber-300 mb-1.5">
+              ✨ Golden Score Orbs
+            </h3>
+            <p>
+              Gold orbs add a randomly rolled
+              <strong class="text-amber-200">20–1000 points</strong> to your
+              score. Rare 500 and 1000 point rolls shine brighter!
+            </p>
+          </div>
+
+          <!-- Section 3: Island Types -->
+          <div class="rounded-2xl bg-slate-900/70 border border-white/10 p-4">
+            <h3
+              class="font-display text-base font-bold text-white mb-2 flex items-center gap-2"
+            >
+              <span>🏝️</span>
+              <span>Sky Islands &amp; Boosters</span>
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div
+                class="p-2.5 rounded-xl bg-slate-950/60 border border-emerald-400/20"
+              >
+                <div class="font-semibold text-emerald-300 mb-0.5">
+                  🟢 Emerald Turf Islands
+                </div>
+                <p class="text-xs text-slate-400">
+                  Solid, reliable floating islands. Safe to bounce on as many
+                  times as you need.
+                </p>
+              </div>
+              <div
+                class="p-2.5 rounded-xl bg-slate-950/60 border border-sky-400/20"
+              >
+                <div class="font-semibold text-sky-300 mb-0.5">
+                  🔵 Glider Platforms
+                </div>
+                <p class="text-xs text-slate-400">
+                  Motorized sky pads that patrol horizontally across the clouds.
+                  Time your landing!
+                </p>
+              </div>
+              <div
+                class="p-2.5 rounded-xl bg-slate-950/60 border border-orange-400/20"
+              >
+                <div class="font-semibold text-orange-300 mb-0.5">
+                  🟠 Cracked Sandstone
+                </div>
+                <p class="text-xs text-slate-400">
+                  Appears at higher altitudes! Gives you one full bounce before
+                  shattering into dust.
+                </p>
+              </div>
+              <div
+                class="p-2.5 rounded-xl bg-slate-950/60 border border-amber-400/20"
+              >
+                <div class="font-semibold text-amber-300 mb-0.5">
+                  🚀 Gold Boost Springs
+                </div>
+                <p class="text-xs text-slate-400">
+                  Launches your Hopper into a high-speed somersault past
+                  multiple islands at once.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Profile & Customization -->
+          <div class="rounded-2xl bg-slate-900/70 border border-white/10 p-4">
+            <h3
+              class="font-display text-base font-bold text-white mb-1 flex items-center gap-2"
+            >
+              <span>👕</span>
+              <span>Player Profile &amp; Custom Look</span>
+            </h3>
+            <p>
+              Sign in with your
+              <strong class="text-indigo-300">start.ng</strong> account to
+              automatically wear your profile's signature outfit colors, hat,
+              and accessory and track your personal bests under your name.
+              Playing as a Guest? Open
+              <strong class="text-amber-300">Customize Character Outfit</strong>
+              on the main menu anytime to mix and match hats, glasses, scarves,
+              backpacks, and colors!
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME & PLATFORM LOGIC -->
+    <script type="module">
+      import * as THREE from "three";
+
+      /**********************************************************************
+       * 1. PLATFORM INTEGRATION (src/platform.js specification)
+       *    Exports: START_NG, getCurrentUser(), onUserChange(fn), signIn()
+       **********************************************************************/
+      function detectStartNgOrigin() {
+        const host = window.location.hostname;
+        if (host.endsWith(".start.ng")) {
+          return "https://start.ng";
+        }
+        if (host.endsWith(".start.localhost")) {
+          return "http://start.localhost:5173";
+        }
+        return null;
+      }
+
+      export const START_NG = detectStartNgOrigin();
+
+      let currentUser = null;
+      const userListeners = new Set();
+      let connectIframe = null;
+      let iframeReadyPromise = null;
+
+      function notifyUserListeners() {
+        for (const fn of userListeners) {
+          try {
+            fn(currentUser);
+          } catch (err) {
+            console.error("[platform] listener error:", err);
+          }
+        }
+      }
+
+      function ensureConnectIframe() {
+        if (!START_NG) return Promise.resolve(null);
+        if (iframeReadyPromise) return iframeReadyPromise;
+
+        iframeReadyPromise = new Promise((resolve) => {
+          const iframe = document.createElement("iframe");
+          iframe.src = `${START_NG}/connect`;
+          iframe.style.display = "none";
+          iframe.setAttribute("aria-hidden", "true");
+          iframe.tabIndex = -1;
+
+          const timeoutId = setTimeout(() => {
+            resolve(null);
+          }, 3000);
+
+          iframe.addEventListener(
+            "load",
+            () => {
+              clearTimeout(timeoutId);
+              connectIframe = iframe;
+              resolve(iframe);
+            },
+            { once: true },
+          );
+
+          iframe.addEventListener(
+            "error",
+            () => {
+              clearTimeout(timeoutId);
+              resolve(null);
+            },
+            { once: true },
+          );
+
+          document.body.appendChild(iframe);
+        });
+
+        return iframeReadyPromise;
+      }
+
+      /**
+       * Queries ${START_NG}/connect via postMessage with a 3-second timeout.
+       * Resolves to:
+       *   - { answered: true, user: { id, name, style } | null }
+       *   - { answered: false, user: null } on timeout ("no answer")
+       */
+      async function queryWhoAmI() {
+        if (!START_NG) {
+          return { answered: false, user: null };
+        }
+
+        const iframe = await ensureConnectIframe();
+        if (!iframe || !iframe.contentWindow) {
+          return { answered: false, user: null };
+        }
+
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+        return new Promise((resolve) => {
+          let settled = false;
+
+          const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            window.removeEventListener("message", onMessage);
+            // 3-second timeout -> treat as "no answer" rather than "signed out"
+            resolve({ answered: false, user: null });
+          }, 3000);
+
+          function onMessage(event) {
+            if (event.origin !== START_NG) return;
+            if (event.source !== iframe.contentWindow) return;
+
+            const data = event.data;
+            if (
+              !data ||
+              data.type !== "startng:user" ||
+              data.requestId !== requestId
+            ) {
+              return;
+            }
+
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            window.removeEventListener("message", onMessage);
+
+            resolve({
+              answered: true,
+              user: data.user || null,
+            });
+          }
+
+          window.addEventListener("message", onMessage);
+
+          try {
+            iframe.contentWindow.postMessage(
+              { type: "startng:whoami", requestId },
+              START_NG,
+            );
+          } catch (err) {
+            clearTimeout(timer);
+            window.removeEventListener("message", onMessage);
+            resolve({ answered: false, user: null });
+          }
+        });
+      }
+
+      function usersAreEqual(a, b) {
+        return JSON.stringify(a) === JSON.stringify(b);
+      }
+
+      export async function getCurrentUser() {
+        if (!START_NG) {
+          return currentUser;
+        }
+        const result = await queryWhoAmI();
+        if (result.answered) {
+          const changed = !usersAreEqual(currentUser, result.user);
+          currentUser = result.user;
+          if (changed) notifyUserListeners();
+        }
+        return currentUser;
+      }
+
+      export function onUserChange(fn) {
+        if (typeof fn === "function") {
+          userListeners.add(fn);
+        }
+        return () => userListeners.delete(fn);
+      }
+
+      export function signIn() {
+        if (!START_NG) return;
+        window.location.href = `${START_NG}/?return_to=${encodeURIComponent(window.location.href)}`;
+      }
+
+      // Re-check on visibilitychange (when tab becomes visible) and window focus.
+      // Ignore checks that got no answer.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && START_NG) {
+          getCurrentUser();
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        if (START_NG) {
+          getCurrentUser();
+        }
+      });
+
+      /**********************************************************************
+       * 2. STYLE NORMALIZATION ("styling centrally")
+       *    Validates colors, hats, and accessories with safe fallbacks.
+       **********************************************************************/
+      const DEFAULT_STYLE = Object.freeze({
+        primaryColor: "#ff6b6b",
+        secondaryColor: "#2b2f4a",
+        skinColor: "#8d5524",
+        hat: "cap",
+        accessory: "backpack",
+      });
+
+      const VALID_HATS = new Set(["none", "cap", "beanie", "tophat", "crown"]);
+      const VALID_ACCESSORIES = new Set([
+        "none",
+        "glasses",
+        "scarf",
+        "backpack",
+      ]);
+
+      function isValidHexColor(val) {
+        return (
+          typeof val === "string" &&
+          /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val.trim())
+        );
+      }
+
+      function normalizeStyle(rawStyle) {
+        const src = rawStyle && typeof rawStyle === "object" ? rawStyle : {};
+        return {
+          primaryColor: isValidHexColor(src.primaryColor)
+            ? src.primaryColor.trim()
+            : DEFAULT_STYLE.primaryColor,
+          secondaryColor: isValidHexColor(src.secondaryColor)
+            ? src.secondaryColor.trim()
+            : DEFAULT_STYLE.secondaryColor,
+          skinColor: isValidHexColor(src.skinColor)
+            ? src.skinColor.trim()
+            : DEFAULT_STYLE.skinColor,
+          hat: VALID_HATS.has(src.hat) ? src.hat : DEFAULT_STYLE.hat,
+          accessory: VALID_ACCESSORIES.has(src.accessory)
+            ? src.accessory
+            : DEFAULT_STYLE.accessory,
+        };
+      }
+
+      /**********************************************************************
+       * 3. LOCALSTORAGE SCORES & LEADERBOARD (Keyed by user.id or "guest")
+       **********************************************************************/
+      const LEADERBOARD_STORAGE_KEY = "skyhopper_leaderboard_v1";
+
+      function getBestScoreKey(userId) {
+        return `skyhopper_best_${userId || "guest"}`;
+      }
+
+      function getPersonalBest(userId) {
+        try {
+          const raw = localStorage.getItem(getBestScoreKey(userId));
+          const parsed = parseInt(raw, 10);
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        } catch {
+          return 0;
+        }
+      }
+
+      function getLeaderboard() {
+        try {
+          const raw = localStorage.getItem(LEADERBOARD_STORAGE_KEY);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveScore(user, score) {
+        const cleanScore = Math.max(0, Math.floor(score));
+        const userId = user?.id || "guest";
+        const userName = user?.name || "Guest";
+        const userStyle = normalizeStyle(user?.style);
+
+        const prevBest = getPersonalBest(userId);
+        const isNewBest = cleanScore > prevBest;
+        const newBest = Math.max(prevBest, cleanScore);
+
+        try {
+          localStorage.setItem(getBestScoreKey(userId), String(newBest));
+
+          const board = getLeaderboard();
+          const existingIndex = board.findIndex((entry) => entry.id === userId);
+
+          if (existingIndex >= 0) {
+            board[existingIndex].name = userName;
+            board[existingIndex].style = userStyle;
+            if (cleanScore >= board[existingIndex].score) {
+              board[existingIndex].score = cleanScore;
+              board[existingIndex].updatedAt = Date.now();
+            }
+          } else if (cleanScore > 0) {
+            board.push({
+              id: userId,
+              name: userName,
+              score: cleanScore,
+              style: userStyle,
+              updatedAt: Date.now(),
+            });
+          }
+
+          board.sort((a, b) => b.score - a.score);
+          localStorage.setItem(
+            LEADERBOARD_STORAGE_KEY,
+            JSON.stringify(board.slice(0, 10)),
+          );
+        } catch (err) {
+          console.warn("Could not persist leaderboard to localStorage:", err);
+        }
+
+        // Also notify the start.ng bridge iframe if connected (non-blocking)
+        if (
+          START_NG &&
+          connectIframe &&
+          connectIframe.contentWindow &&
+          cleanScore > 0
+        ) {
+          try {
+            connectIframe.contentWindow.postMessage(
+              {
+                type: "startng:score",
+                score: cleanScore,
+                bestScore: newBest,
+                userId,
+              },
+              START_NG,
+            );
+          } catch {}
+        }
+
+        return { isNewBest, bestScore: newBest };
+      }
+
+      /**********************************************************************
+       * 4. WEB AUDIO SYNTHESIZER (Zero external audio dependencies)
+       **********************************************************************/
+      class SoundFX {
+        constructor() {
+          this.ctx = null;
+          this.muted = false;
+        }
+
+        init() {
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) this.ctx = new AudioCtx();
+          }
+          if (this.ctx && this.ctx.state === "suspended") {
+            this.ctx.resume();
+          }
+        }
+
+        playJump(isSpring = false) {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = isSpring ? "triangle" : "sine";
+          const startFreq = isSpring ? 280 : 220;
+          const endFreq = isSpring ? 780 : 480;
+          const duration = isSpring ? 0.28 : 0.14;
+
+          osc.frequency.setValueAtTime(startFreq, now);
+          osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+
+          gain.gain.setValueAtTime(0.16, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + duration);
+        }
+
+        playCrack() {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(190, now);
+          osc.frequency.exponentialRampToValueAtTime(75, now + 0.18);
+
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.18);
+        }
+
+        playHeart() {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+
+          const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+          notes.forEach((freq, idx) => {
+            const now = this.ctx.currentTime + idx * 0.05;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(freq, now);
+
+            gain.gain.setValueAtTime(0.14, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.16);
+          });
+        }
+
+        playScoreOrb(rare = false) {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+          const now = this.ctx.currentTime;
+          const notes = rare ? [659.25, 880, 1174.66, 1568] : [659.25, 880];
+          notes.forEach((freq, index) => {
+            const start = now + index * (rare ? 0.055 : 0.035);
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = rare ? "triangle" : "sine";
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(rare ? 0.16 : 0.11, start);
+            gain.gain.exponentialRampToValueAtTime(
+              0.001,
+              start + (rare ? 0.24 : 0.14),
+            );
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(start);
+            osc.stop(start + (rare ? 0.24 : 0.14));
+          });
+        }
+
+        playRevive() {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+
+          const notes = [392.0, 523.25, 659.25, 783.99, 1046.5]; // G4 -> C6 heroic chime
+          notes.forEach((freq, idx) => {
+            const now = this.ctx.currentTime + idx * 0.055;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, now);
+
+            gain.gain.setValueAtTime(0.18, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.24);
+          });
+        }
+
+        playGameOver() {
+          if (this.muted) return;
+          this.init();
+          if (!this.ctx) return;
+
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(95, now + 0.45);
+
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.45);
+        }
+      }
+
+      const sfx = new SoundFX();
+
+      /**********************************************************************
+       * 5. THREE.JS 3D CHARACTER BUILDER
+       *    Maps { primaryColor, secondaryColor, skinColor, hat, accessory }
+       **********************************************************************/
+      function createCharacterMesh(styleInput) {
+        const style = normalizeStyle(styleInput);
+        const root = new THREE.Group();
+
+        // Shared materials that update when applyStyleToCharacter is called
+        const mats = {
+          primary: new THREE.MeshStandardMaterial({
+            color: style.primaryColor,
+            roughness: 0.45,
+            metalness: 0.08,
+          }),
+          secondary: new THREE.MeshStandardMaterial({
+            color: style.secondaryColor,
+            roughness: 0.55,
+            metalness: 0.08,
+          }),
+          skin: new THREE.MeshStandardMaterial({
+            color: style.skinColor,
+            roughness: 0.5,
+            metalness: 0.05,
+          }),
+          white: new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.3,
+          }),
+          dark: new THREE.MeshStandardMaterial({
+            color: 0x111827,
+            roughness: 0.25,
+            metalness: 0.3,
+          }),
+          gold: new THREE.MeshStandardMaterial({
+            color: 0xfbbf24,
+            roughness: 0.25,
+            metalness: 0.65,
+          }),
+          gem: new THREE.MeshStandardMaterial({
+            color: 0x38bdf8,
+            roughness: 0.15,
+            metalness: 0.4,
+            emissive: 0x0284c7,
+            emissiveIntensity: 0.3,
+          }),
+          blush: new THREE.MeshStandardMaterial({
+            color: 0xf43f5e,
+            roughness: 0.6,
+            transparent: true,
+            opacity: 0.55,
+          }),
+        };
+
+        // Body wrapper for squash & stretch
+        const bodyGroup = new THREE.Group();
+        root.add(bodyGroup);
+
+        // --- LEGS (secondaryColor trousers + primaryColor shoes) ---
+        const leftLegPivot = new THREE.Group();
+        leftLegPivot.position.set(-0.22, 0.48, 0);
+        const leftLeg = new THREE.Mesh(
+          new THREE.BoxGeometry(0.24, 0.42, 0.26),
+          mats.secondary,
+        );
+        leftLeg.position.y = -0.18;
+        leftLeg.castShadow = true;
+        const leftShoe = new THREE.Mesh(
+          new THREE.BoxGeometry(0.26, 0.16, 0.34),
+          mats.primary,
+        );
+        leftShoe.position.set(0, -0.38, 0.04);
+        leftLegPivot.add(leftLeg, leftShoe);
+
+        const rightLegPivot = new THREE.Group();
+        rightLegPivot.position.set(0.22, 0.48, 0);
+        const rightLeg = new THREE.Mesh(
+          new THREE.BoxGeometry(0.24, 0.42, 0.26),
+          mats.secondary,
+        );
+        rightLeg.position.y = -0.18;
+        rightLeg.castShadow = true;
+        const rightShoe = new THREE.Mesh(
+          new THREE.BoxGeometry(0.26, 0.16, 0.34),
+          mats.primary,
+        );
+        rightShoe.position.set(0, -0.38, 0.04);
+        rightLegPivot.add(rightLeg, rightShoe);
+
+        bodyGroup.add(leftLegPivot, rightLegPivot);
+
+        // --- TORSO (primaryColor hoodie/jacket + secondaryColor belt/trim) ---
+        const torso = new THREE.Mesh(
+          new THREE.BoxGeometry(0.76, 0.72, 0.46),
+          mats.primary,
+        );
+        torso.position.y = 0.84;
+        torso.castShadow = true;
+        bodyGroup.add(torso);
+
+        const belt = new THREE.Mesh(
+          new THREE.BoxGeometry(0.78, 0.14, 0.48),
+          mats.secondary,
+        );
+        belt.position.y = 0.54;
+        bodyGroup.add(belt);
+
+        // --- ARMS (primaryColor sleeves + skinColor hands) ---
+        const leftArmPivot = new THREE.Group();
+        leftArmPivot.position.set(-0.5, 1.12, 0);
+        const leftSleeve = new THREE.Mesh(
+          new THREE.BoxGeometry(0.22, 0.38, 0.24),
+          mats.primary,
+        );
+        leftSleeve.position.y = -0.15;
+        leftSleeve.castShadow = true;
+        const leftHand = new THREE.Mesh(
+          new THREE.BoxGeometry(0.2, 0.2, 0.2),
+          mats.skin,
+        );
+        leftHand.position.y = -0.4;
+        leftArmPivot.add(leftSleeve, leftHand);
+
+        const rightArmPivot = new THREE.Group();
+        rightArmPivot.position.set(0.5, 1.12, 0);
+        const rightSleeve = new THREE.Mesh(
+          new THREE.BoxGeometry(0.22, 0.38, 0.24),
+          mats.primary,
+        );
+        rightSleeve.position.y = -0.15;
+        rightSleeve.castShadow = true;
+        const rightHand = new THREE.Mesh(
+          new THREE.BoxGeometry(0.2, 0.2, 0.2),
+          mats.skin,
+        );
+        rightHand.position.y = -0.4;
+        rightArmPivot.add(rightSleeve, rightHand);
+
+        bodyGroup.add(leftArmPivot, rightArmPivot);
+
+        // --- HEAD (skinColor + Eyes + Smile) ---
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 1.54, 0);
+        bodyGroup.add(headGroup);
+
+        const headMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.68, 0.64, 0.64),
+          mats.skin,
+        );
+        headMesh.castShadow = true;
+        headGroup.add(headMesh);
+
+        // Ears
+        const leftEar = new THREE.Mesh(
+          new THREE.BoxGeometry(0.1, 0.18, 0.14),
+          mats.skin,
+        );
+        leftEar.position.set(-0.37, -0.02, 0);
+        const rightEar = leftEar.clone();
+        rightEar.position.x = 0.37;
+        headGroup.add(leftEar, rightEar);
+
+        // Eyes (Front is +Z)
+        const eyeWhiteGeo = new THREE.BoxGeometry(0.14, 0.16, 0.04);
+        const pupilGeo = new THREE.BoxGeometry(0.08, 0.1, 0.05);
+
+        const leftEyeWhite = new THREE.Mesh(eyeWhiteGeo, mats.white);
+        leftEyeWhite.position.set(-0.15, 0.05, 0.31);
+        const leftPupil = new THREE.Mesh(pupilGeo, mats.dark);
+        leftPupil.position.set(-0.15, 0.04, 0.32);
+
+        const rightEyeWhite = new THREE.Mesh(eyeWhiteGeo, mats.white);
+        rightEyeWhite.position.set(0.15, 0.05, 0.31);
+        const rightPupil = new THREE.Mesh(pupilGeo, mats.dark);
+        rightPupil.position.set(0.15, 0.04, 0.32);
+
+        // Rosy cheeks
+        const cheekGeo = new THREE.BoxGeometry(0.1, 0.06, 0.04);
+        const leftCheek = new THREE.Mesh(cheekGeo, mats.blush);
+        leftCheek.position.set(-0.22, -0.08, 0.31);
+        const rightCheek = new THREE.Mesh(cheekGeo, mats.blush);
+        rightCheek.position.set(0.22, -0.08, 0.31);
+
+        // Happy smile
+        const smile = new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.04, 0.04),
+          mats.dark,
+        );
+        smile.position.set(0, -0.12, 0.31);
+
+        headGroup.add(
+          leftEyeWhite,
+          leftPupil,
+          rightEyeWhite,
+          rightPupil,
+          leftCheek,
+          rightCheek,
+          smile,
+        );
+
+        // --- HATS (none | cap | beanie | tophat | crown) ---
+        const hats = {
+          cap: new THREE.Group(),
+          beanie: new THREE.Group(),
+          tophat: new THREE.Group(),
+          crown: new THREE.Group(),
+        };
+
+        // 1) Cap
+        const capCrown = new THREE.Mesh(
+          new THREE.BoxGeometry(0.72, 0.22, 0.68),
+          mats.primary,
+        );
+        capCrown.position.set(0, 0.34, 0);
+        const capVisor = new THREE.Mesh(
+          new THREE.BoxGeometry(0.68, 0.07, 0.32),
+          mats.secondary,
+        );
+        capVisor.position.set(0, 0.26, 0.44);
+        const capButton = new THREE.Mesh(
+          new THREE.BoxGeometry(0.1, 0.06, 0.1),
+          mats.secondary,
+        );
+        capButton.position.set(0, 0.46, 0);
+        hats.cap.add(capCrown, capVisor, capButton);
+
+        // 2) Beanie
+        const beanieCuff = new THREE.Mesh(
+          new THREE.BoxGeometry(0.74, 0.16, 0.7),
+          mats.secondary,
+        );
+        beanieCuff.position.set(0, 0.3, 0);
+        const beanieDome = new THREE.Mesh(
+          new THREE.BoxGeometry(0.66, 0.24, 0.62),
+          mats.primary,
+        );
+        beanieDome.position.set(0, 0.46, 0);
+        const beaniePom = new THREE.Mesh(
+          new THREE.SphereGeometry(0.12, 10, 10),
+          mats.white,
+        );
+        beaniePom.position.set(0, 0.64, 0);
+        hats.beanie.add(beanieCuff, beanieDome, beaniePom);
+
+        // 3) Tophat
+        const tophatBrim = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.56, 0.56, 0.07, 16),
+          mats.secondary,
+        );
+        tophatBrim.position.set(0, 0.33, 0);
+        const tophatRibbon = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.39, 0.39, 0.1, 16),
+          mats.primary,
+        );
+        tophatRibbon.position.set(0, 0.41, 0);
+        const tophatTall = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.38, 0.36, 0.48, 16),
+          mats.secondary,
+        );
+        tophatTall.position.set(0, 0.6, 0);
+        hats.tophat.add(tophatBrim, tophatRibbon, tophatTall);
+
+        // 4) Crown
+        const crownBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.4, 0.36, 0.18, 10),
+          mats.gold,
+        );
+        crownBase.position.set(0, 0.38, 0);
+        hats.crown.add(crownBase);
+        for (let i = 0; i < 5; i++) {
+          const angle = (i / 5) * Math.PI * 2;
+          const spike = new THREE.Mesh(
+            new THREE.ConeGeometry(0.1, 0.2, 4),
+            mats.gold,
+          );
+          spike.position.set(
+            Math.sin(angle) * 0.32,
+            0.54,
+            Math.cos(angle) * 0.32,
+          );
+          hats.crown.add(spike);
+
+          const gem = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.055, 0),
+            i % 2 === 0 ? mats.primary : mats.gem,
+          );
+          gem.position.set(
+            Math.sin(angle) * 0.38,
+            0.38,
+            Math.cos(angle) * 0.38,
+          );
+          hats.crown.add(gem);
+        }
+
+        Object.values(hats).forEach((h) => headGroup.add(h));
+
+        // --- ACCESSORIES (none | glasses | scarf | backpack) ---
+        const accessories = {
+          glasses: new THREE.Group(),
+          scarf: new THREE.Group(),
+          backpack: new THREE.Group(),
+        };
+
+        // 1) Glasses (attached to headGroup)
+        const leftRim = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.2, 0.06),
+          mats.dark,
+        );
+        leftRim.position.set(-0.16, 0.06, 0.34);
+        const rightRim = new THREE.Mesh(
+          new THREE.BoxGeometry(0.28, 0.2, 0.06),
+          mats.dark,
+        );
+        rightRim.position.set(0.16, 0.06, 0.34);
+        const bridge = new THREE.Mesh(
+          new THREE.BoxGeometry(0.1, 0.05, 0.05),
+          mats.gold,
+        );
+        bridge.position.set(0, 0.08, 0.35);
+        const leftTemple = new THREE.Mesh(
+          new THREE.BoxGeometry(0.05, 0.05, 0.38),
+          mats.dark,
+        );
+        leftTemple.position.set(-0.33, 0.07, 0.16);
+        const rightTemple = leftTemple.clone();
+        rightTemple.position.x = 0.33;
+        accessories.glasses.add(
+          leftRim,
+          rightRim,
+          bridge,
+          leftTemple,
+          rightTemple,
+        );
+        headGroup.add(accessories.glasses);
+
+        // 2) Scarf (attached to bodyGroup around neck)
+        const neckRing = new THREE.Mesh(
+          new THREE.BoxGeometry(0.78, 0.16, 0.54),
+          mats.secondary,
+        );
+        neckRing.position.set(0, 1.22, 0);
+        const scarfStripe = new THREE.Mesh(
+          new THREE.BoxGeometry(0.8, 0.05, 0.56),
+          mats.primary,
+        );
+        scarfStripe.position.set(0, 1.22, 0);
+        const scarfTail = new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.42, 0.1),
+          mats.secondary,
+        );
+        scarfTail.position.set(0.18, 1.0, 0.27);
+        scarfTail.rotation.z = 0.12;
+        const scarfTailTip = new THREE.Mesh(
+          new THREE.BoxGeometry(0.19, 0.08, 0.11),
+          mats.primary,
+        );
+        scarfTailTip.position.set(0.2, 0.82, 0.27);
+        scarfTailTip.rotation.z = 0.12;
+        accessories.scarf.add(neckRing, scarfStripe, scarfTail, scarfTailTip);
+        bodyGroup.add(accessories.scarf);
+
+        // 3) Backpack (attached to back of torso at -Z)
+        const packMain = new THREE.Mesh(
+          new THREE.BoxGeometry(0.56, 0.58, 0.28),
+          mats.secondary,
+        );
+        packMain.position.set(0, 0.88, -0.34);
+        packMain.castShadow = true;
+        const packPocket = new THREE.Mesh(
+          new THREE.BoxGeometry(0.44, 0.28, 0.12),
+          mats.primary,
+        );
+        packPocket.position.set(0, 0.78, -0.49);
+        const packZip = new THREE.Mesh(
+          new THREE.BoxGeometry(0.36, 0.04, 0.14),
+          mats.gold,
+        );
+        packZip.position.set(0, 0.9, -0.49);
+        const strapL = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 0.62, 0.5),
+          mats.secondary,
+        );
+        strapL.position.set(-0.22, 0.88, -0.02);
+        const strapR = strapL.clone();
+        strapR.position.x = 0.22;
+        accessories.backpack.add(packMain, packPocket, packZip, strapL, strapR);
+        bodyGroup.add(accessories.backpack);
+
+        // Method to dynamically apply any style update
+        function applyStyle(nextStyleInput) {
+          const next = normalizeStyle(nextStyleInput);
+          mats.primary.color.set(next.primaryColor);
+          mats.secondary.color.set(next.secondaryColor);
+          mats.skin.color.set(next.skinColor);
+
+          Object.entries(hats).forEach(([key, group]) => {
+            group.visible = key === next.hat;
+          });
+
+          Object.entries(accessories).forEach(([key, group]) => {
+            group.visible = key === next.accessory;
+          });
+        }
+
+        applyStyle(style);
+
+        root.userData = {
+          bodyGroup,
+          headGroup,
+          leftArmPivot,
+          rightArmPivot,
+          leftLegPivot,
+          rightLegPivot,
+          scarfTail,
+          applyStyle,
+        };
+
+        return root;
+      }
+
+      /**********************************************************************
+       * 6. THREE.JS SCENE, PLATFORMS, STARS & PARTICLES
+       **********************************************************************/
+      const canvas = document.getElementById("game-canvas");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        powerPreference: "high-performance",
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+      scene.fog = new THREE.FogExp2(0x0f172a, 0.018);
+
+      const camera = new THREE.PerspectiveCamera(
+        50,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        120,
+      );
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xe0f2fe, 0.85);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
+      dirLight.position.set(8, 18, 12);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 1024;
+      dirLight.shadow.mapSize.height = 1024;
+      scene.add(dirLight);
+
+      const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.65);
+      rimLight.position.set(-10, 6, -10);
+      scene.add(rimLight);
+
+      // World groups
+      const platformsGroup = new THREE.Group();
+      const heartsGroup = new THREE.Group();
+      const scoreOrbsGroup = new THREE.Group();
+      const cloudsGroup = new THREE.Group();
+      const particlesGroup = new THREE.Group();
+      scene.add(
+        platformsGroup,
+        heartsGroup,
+        scoreOrbsGroup,
+        cloudsGroup,
+        particlesGroup,
+      );
+
+      // Create Player Character
+      let activeStyle = { ...DEFAULT_STYLE };
+      const playerMesh = createCharacterMesh(activeStyle);
+      scene.add(playerMesh);
+
+      // Shared geometries & materials for platforms and 3D hearts
+      const platTopGeo = new THREE.BoxGeometry(2.4, 0.24, 1.35);
+      const platBaseGeo = new THREE.BoxGeometry(2.15, 0.28, 1.15);
+      const springBaseGeo = new THREE.CylinderGeometry(0.32, 0.36, 0.14, 12);
+      const springCapGeo = new THREE.CylinderGeometry(0.36, 0.32, 0.1, 12);
+
+      // Build a plump 3D Heart Geometry using THREE.Shape + ExtrudeGeometry
+      function createHeartGeometry() {
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0.22);
+        shape.bezierCurveTo(0, 0.38, -0.18, 0.5, -0.34, 0.5);
+        shape.bezierCurveTo(-0.58, 0.5, -0.58, 0.16, -0.58, 0.16);
+        shape.bezierCurveTo(-0.58, -0.08, -0.34, -0.3, 0, -0.52);
+        shape.bezierCurveTo(0.34, -0.3, 0.58, -0.08, 0.58, 0.16);
+        shape.bezierCurveTo(0.58, 0.16, 0.58, 0.5, 0.34, 0.5);
+        shape.bezierCurveTo(0.18, 0.5, 0, 0.38, 0, 0.22);
+
+        const geo = new THREE.ExtrudeGeometry(shape, {
+          depth: 0.18,
+          bevelEnabled: true,
+          bevelSegments: 3,
+          steps: 1,
+          bevelSize: 0.06,
+          bevelThickness: 0.06,
+        });
+        geo.center();
+        geo.scale(0.68, 0.68, 0.68);
+        return geo;
+      }
+
+      const heartGeo = createHeartGeometry();
+      const scoreOrbGeo = new THREE.OctahedronGeometry(0.48, 1);
+      const matScoreOrb = new THREE.MeshStandardMaterial({
+        color: 0xfacc15,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 0.85,
+        roughness: 0.18,
+        metalness: 0.72,
+      });
+
+      const matIslandTop = new THREE.MeshStandardMaterial({
+        color: 0x34d399,
+        roughness: 0.4,
+      });
+      const matIslandBase = new THREE.MeshStandardMaterial({
+        color: 0x475569,
+        roughness: 0.7,
+      });
+      const matMovingTop = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        roughness: 0.3,
+        metalness: 0.2,
+      });
+      const matMovingBase = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        roughness: 0.6,
+      });
+      const matFragileTop = new THREE.MeshStandardMaterial({
+        color: 0xfb923c,
+        roughness: 0.55,
+      });
+      const matFragileBase = new THREE.MeshStandardMaterial({
+        color: 0x7c2d12,
+        roughness: 0.75,
+      });
+      const matSpringGold = new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        roughness: 0.25,
+        metalness: 0.6,
+      });
+      const matSpringRed = new THREE.MeshStandardMaterial({
+        color: 0xf43f5e,
+        roughness: 0.35,
+      });
+      const matHeart = new THREE.MeshStandardMaterial({
+        color: 0xf43f5e,
+        emissive: 0xe11d48,
+        emissiveIntensity: 0.42,
+        roughness: 0.2,
+        metalness: 0.35,
+      });
+      const matCloud = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.9,
+        transparent: true,
+        opacity: 0.25,
+      });
+
+      // Background decorative clouds
+      const backgroundClouds = [];
+      function spawnBackgroundClouds() {
+        cloudsGroup.clear();
+        backgroundClouds.length = 0;
+        for (let i = 0; i < 18; i++) {
+          const cloud = new THREE.Group();
+          const puffCount = 2 + Math.floor(Math.random() * 2);
+          for (let p = 0; p < puffCount; p++) {
+            const puff = new THREE.Mesh(
+              new THREE.SphereGeometry(0.7 + Math.random() * 0.6, 8, 8),
+              matCloud,
+            );
+            puff.position.set(
+              p * 0.8 - 0.4,
+              (Math.random() - 0.5) * 0.3,
+              (Math.random() - 0.5) * 0.3,
+            );
+            cloud.add(puff);
+          }
+          cloud.position.set(
+            (Math.random() - 0.5) * 28,
+            Math.random() * 36 - 4,
+            -6 - Math.random() * 10,
+          );
+          cloudsGroup.add(cloud);
+          backgroundClouds.push({
+            mesh: cloud,
+            speed:
+              (Math.random() < 0.5 ? 1 : -1) * (0.2 + Math.random() * 0.45),
+          });
+        }
+      }
+
+      // 3D Burst Particles
+      const particles = [];
+      const particleGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
+
+      function spawnParticles(x, y, z, colorHex, count = 10) {
+        const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+        for (let i = 0; i < count; i++) {
+          const mesh = new THREE.Mesh(particleGeo, mat);
+          mesh.position.set(x, y, z);
+          particlesGroup.add(mesh);
+          particles.push({
+            mesh,
+            vx: (Math.random() - 0.5) * 6.5,
+            vy: 1.5 + Math.random() * 5.5,
+            vz: (Math.random() - 0.5) * 4.5,
+            life: 1.0,
+          });
+        }
+      }
+
+      // Floating HTML popup with optional descriptive subtitle
+      const popupLayer = document.getElementById("popup-layer");
+      function showFloatingPopup(
+        worldPos,
+        primaryText,
+        colorClass = "text-amber-300",
+        subText = "",
+      ) {
+        const vec = worldPos.clone().project(camera);
+        const x = (vec.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-(vec.y * 0.5) + 0.5) * window.innerHeight;
+
+        const el = document.createElement("div");
+        el.className = `score-popup flex flex-col items-center text-center ${colorClass}`;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+
+        const mainLine = document.createElement("div");
+        mainLine.className = "text-lg sm:text-xl font-bold leading-tight";
+        mainLine.textContent = primaryText;
+        el.appendChild(mainLine);
+
+        if (subText) {
+          const subLine = document.createElement("div");
+          subLine.className =
+            "text-[11px] sm:text-xs font-semibold text-white bg-slate-900/85 px-2 py-0.5 rounded-full border border-white/20 mt-0.5 shadow";
+          subLine.textContent = subText;
+          el.appendChild(subLine);
+        }
+
+        popupLayer.appendChild(el);
+        setTimeout(() => el.remove(), 1050);
+      }
+
+      /**********************************************************************
+       * 7. GAME STATE & PHYSICS CONSTANTS
+       **********************************************************************/
+      const WORLD_HALF_WIDTH = 4.8;
+      const PLAYFIELD_WIDTH = WORLD_HALF_WIDTH * 2;
+      const CAMERA_FOV = 50;
+      const CAMERA_WIDTH_PADDING = 1.08;
+      const SPAWN_AHEAD_VIEWPORT_FACTOR = 0.72;
+      const MAX_HEARTS = 3;
+      const HEART_SPAWN_CHANCE = 0.045;
+      const HEART_MIN_PLATFORM_GAP = 15;
+      const HEART_MIN_HEIGHT = 20;
+      const SCORE_ORB_SPAWN_CHANCE = 0.12;
+      const SCORE_ORB_ROLLS = Object.freeze([
+        [20, 0.4],
+        [50, 0.28],
+        [100, 0.17],
+        [200, 0.1],
+        [500, 0.04],
+        [1000, 0.01],
+      ]);
+      const SCORE_ORB_RARE_THRESHOLD = 500;
+      const SCORE_ORB_PARTICLES = 16;
+      const RARE_ORB_PARTICLES = 32;
+      const HORIZONTAL_STEP_START = [0.2, 0.47];
+      const HORIZONTAL_STEP_HIGH = [0.24, 0.6];
+      const MOVING_STEP_SAFETY = 0.7;
+      const MOVING_PLATFORM_SPEED_MIN = 2.5;
+      const MOVING_PLATFORM_SPEED_MAX = 5.6;
+      const GRAVITY = -26.0;
+      const JUMP_VELOCITY = 14.2;
+      const SPRING_VELOCITY = 22.0;
+      const MOVE_SPEED = 10.4;
+
+      let gameState = "MENU"; // 'MENU' | 'PLAYING' | 'GAMEOVER'
+      let score = 0;
+      let bonusPoints = 0;
+      let hearts = 0;
+      let totalHeartsCollected = 0;
+      let maxPlayerY = 0;
+      let cameraMinY = 0;
+      let cameraCurrentY = 3.5;
+      let highestSpawnedY = 0;
+      let lastPlatformX = 0;
+      let lastTime = performance.now();
+      let pointerSteer = 0;
+      let platformSpawnIndex = 0;
+      let lastHeartSpawnIndex = -HEART_MIN_PLATFORM_GAP;
+
+      // Player physics state
+      const player = {
+        x: 0,
+        y: 0.5,
+        z: 0,
+        vx: 0,
+        vy: 0,
+        facing: 0, // target Y rotation in radians
+        squash: 0,
+        spinTimer: 0,
+      };
+
+      const platforms = [];
+      const heartItems = [];
+      const scoreOrbs = [];
+
+      function clearSceneEntities() {
+        platformsGroup.clear();
+        heartsGroup.clear();
+        scoreOrbsGroup.clear();
+        particlesGroup.clear();
+        platforms.length = 0;
+        heartItems.length = 0;
+        scoreOrbs.length = 0;
+        particles.length = 0;
+        popupLayer.innerHTML = "";
+      }
+
+      function createPlatform(
+        x,
+        y,
+        type = "normal",
+        hasSpring = false,
+        scaleWidth = 1.0,
+      ) {
+        const group = new THREE.Group();
+        group.position.set(x, y, 0);
+
+        const isMoving = type === "moving";
+        const isFragile = type === "fragile";
+        const topMat = isMoving
+          ? matMovingTop
+          : isFragile
+            ? matFragileTop
+            : matIslandTop;
+        const baseMat = isMoving
+          ? matMovingBase
+          : isFragile
+            ? matFragileBase
+            : matIslandBase;
+
+        const topMesh = new THREE.Mesh(platTopGeo, topMat);
+        topMesh.position.y = -0.12;
+        topMesh.scale.x = scaleWidth;
+        topMesh.receiveShadow = true;
+        topMesh.castShadow = true;
+
+        const baseMesh = new THREE.Mesh(platBaseGeo, baseMat);
+        baseMesh.position.y = -0.36;
+        baseMesh.scale.x = scaleWidth;
+
+        group.add(topMesh, baseMesh);
+
+        let springGroup = null;
+        if (hasSpring) {
+          springGroup = new THREE.Group();
+          const coil = new THREE.Mesh(springBaseGeo, matSpringGold);
+          coil.position.y = 0.08;
+          const cap = new THREE.Mesh(springCapGeo, matSpringRed);
+          cap.position.y = 0.18;
+          springGroup.add(coil, cap);
+          group.add(springGroup);
+        }
+
+        platformsGroup.add(group);
+
+        const platObj = {
+          group,
+          x,
+          y,
+          width: 2.4 * scaleWidth,
+          type,
+          hasSpring,
+          springGroup,
+          vx: isMoving
+            ? (Math.random() < 0.5 ? 1 : -1) * (2.5 + Math.min(3.1, y * 0.018))
+            : 0,
+          bounceAnim: 0,
+          broken: false,
+        };
+        platforms.push(platObj);
+        return platObj;
+      }
+
+      function createHeart(x, y) {
+        const mesh = new THREE.Mesh(heartGeo, matHeart);
+        mesh.position.set(x, y, 0);
+        heartsGroup.add(mesh);
+        heartItems.push({ mesh, x, y, collected: false });
+      }
+
+      function createScoreOrb(x, y) {
+        const mesh = new THREE.Mesh(scoreOrbGeo, matScoreOrb);
+        mesh.position.set(x, y, 0);
+        mesh.scale.set(1, 1.12, 0.8);
+        mesh.castShadow = true;
+        scoreOrbsGroup.add(mesh);
+        scoreOrbs.push({ mesh, x, y, collected: false });
+      }
+
+      function rollScoreOrbValue() {
+        const roll = Math.random();
+        let cumulative = 0;
+        for (const [value, weight] of SCORE_ORB_ROLLS) {
+          cumulative += weight;
+          if (roll < cumulative) return value;
+        }
+        return SCORE_ORB_ROLLS[0][0];
+      }
+
+      function pulseHeartsHUD() {
+        const el = document.getElementById("hud-live-hearts");
+        if (!el) return;
+        el.textContent = `❤️ ${hearts}`;
+        el.style.transform = "scale(1.28)";
+        setTimeout(() => {
+          el.style.transform = "scale(1)";
+        }, 200);
+      }
+
+      function resetWorldForMenu() {
+        gameState = "MENU";
+        clearSceneEntities();
+        spawnBackgroundClouds();
+
+        // Pedestal platform for Menu character showcase
+        createPlatform(0, 0, "normal", false, 1.25);
+        createPlatform(-3.6, 2.6, "normal", false, 1.0);
+        createPlatform(3.4, 4.8, "moving", true, 1.0);
+        createHeart(-3.6, 3.55);
+
+        score = 0;
+        bonusPoints = 0;
+        hearts = 0;
+        totalHeartsCollected = 0;
+        maxPlayerY = 0;
+        cameraMinY = 0;
+        cameraCurrentY = 2.1;
+        highestSpawnedY = 4.8;
+        lastPlatformX = 0;
+        platformSpawnIndex = 0;
+        lastHeartSpawnIndex = -HEART_MIN_PLATFORM_GAP;
+
+        player.x = 0;
+        player.y = 0.1;
+        player.z = 0;
+        player.vx = 0;
+        player.vy = 0;
+        player.facing = 0.35;
+        player.squash = 0;
+        player.spinTimer = 0;
+
+        playerMesh.position.set(0, 0.1, 0);
+        playerMesh.rotation.set(0, 0.35, 0);
+        camera.position.set(0, 2.1, 6.2);
+        camera.lookAt(0, 1.25, 0);
+        dirLight.position.set(8, 18, 12);
+
+        lastTime = performance.now();
+        clock.getDelta();
+      }
+
+      function startNewGame() {
+        sfx.init();
+
+        // 1. Temporarily leave 'PLAYING' while resetting all world & camera state
+        gameState = "RESETTING";
+
+        // 2. Clear all old platforms, hearts, springs, and particle meshes
+        clearSceneEntities();
+
+        // 3. Explicitly reset all score, altitude, heart bank, and camera tracking variables
+        score = 0;
+        bonusPoints = 0;
+        hearts = 0;
+        totalHeartsCollected = 0;
+        maxPlayerY = 0;
+        cameraMinY = 0;
+        cameraCurrentY = 3.5;
+        highestSpawnedY = 0;
+        lastPlatformX = 0;
+        platformSpawnIndex = 0;
+        lastHeartSpawnIndex = -HEART_MIN_PLATFORM_GAP;
+
+        // 4. Reset input states & frame timer so no delta-time spike or stuck key occurs
+        keys.left = false;
+        keys.right = false;
+        pointerSteer = 0;
+        lastTime = performance.now();
+        clock.getDelta();
+
+        // 5. Immediately snap camera & lights to bottom starting view
+        camera.position.set(0, 3.5, 12);
+        camera.lookAt(0, 2, 0);
+        dirLight.position.set(8, 18.5, 12);
+
+        spawnBackgroundClouds();
+
+        // 6. Create wide starter island at (0, 0, 0) plus a guaranteed reachable opening staircase
+        createPlatform(0, 0, "normal", false, 1.8);
+        const firstX = (Math.random() - 0.5) * 2.6;
+        createPlatform(firstX, 1.95, "normal", false, 1.15);
+        const secondStep = PLAYFIELD_WIDTH * (0.17 + Math.random() * 0.055);
+        const secondDir = firstX > 0 ? -1 : 1;
+        const secondX = THREE.MathUtils.clamp(
+          firstX + secondDir * secondStep,
+          -WORLD_HALF_WIDTH + 1.45,
+          WORLD_HALF_WIDTH - 1.45,
+        );
+        createPlatform(secondX, 3.9, "normal", false, 1.05);
+
+        highestSpawnedY = 3.9;
+        lastPlatformX = secondX;
+
+        while (
+          highestSpawnedY <
+          cameraCurrentY +
+            camera.position.z *
+              Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) *
+              SPAWN_AHEAD_VIEWPORT_FACTOR
+        ) {
+          spawnNextPlatform();
+        }
+
+        // 7. Reset player directly on the starter island with initial upward bounce velocity
+        player.x = 0;
+        player.y = 0.05;
+        player.z = 0;
+        player.vx = 0;
+        player.vy = JUMP_VELOCITY;
+        player.facing = 0;
+        player.squash = 0.35;
+        player.spinTimer = 0;
+
+        playerMesh.position.set(0, 0.05, 0);
+        playerMesh.rotation.set(0, 0, 0);
+
+        // 8. Reset HUD counters and hide Game Over modal before entering 'PLAYING'
+        hudLiveScore.textContent = "0";
+        const hudLiveHearts = document.getElementById("hud-live-hearts");
+        if (hudLiveHearts) hudLiveHearts.textContent = "❤️ 0";
+
+        gameState = "PLAYING";
+        updateUIOverlays();
+        sfx.playJump(false);
+        resizeGameView();
+      }
+
+      function spawnNextPlatform() {
+        // Slightly wider vertical spacing & progressive difficulty scaling
+        const difficultyFactor = Math.min(1, highestSpawnedY / 240);
+        const minGap = 1.68 + difficultyFactor * 0.38; // 1.68 -> 2.06
+        const maxGap = 2.38 + difficultyFactor * 0.58; // 2.38 -> 2.96 (max jump apex is ~3.88)
+        const gap = minGap + Math.random() * (maxGap - minGap);
+
+        highestSpawnedY += gap;
+
+        const minRatio = THREE.MathUtils.lerp(
+          HORIZONTAL_STEP_START[0],
+          HORIZONTAL_STEP_HIGH[0],
+          difficultyFactor,
+        );
+        const maxRatio = THREE.MathUtils.lerp(
+          HORIZONTAL_STEP_START[1],
+          HORIZONTAL_STEP_HIGH[1],
+          difficultyFactor,
+        );
+        const stepMagnitude = Math.min(
+          PLAYFIELD_WIDTH * (minRatio + Math.random() * (maxRatio - minRatio)),
+          MOVE_SPEED * 0.8 * MOVING_STEP_SAFETY,
+        );
+        const previousPlatformX = lastPlatformX;
+        const maxAllowedX = WORLD_HALF_WIDTH - 1.45;
+        const roomRight = maxAllowedX - lastPlatformX;
+        const roomLeft = lastPlatformX + maxAllowedX;
+        const dirs = [];
+        if (roomRight >= stepMagnitude) dirs.push(1);
+        if (roomLeft >= stepMagnitude) dirs.push(-1);
+        const dir = dirs.length
+          ? dirs[Math.floor(Math.random() * dirs.length)]
+          : roomRight >= roomLeft
+            ? 1
+            : -1;
+        const room = dir > 0 ? roomRight : roomLeft;
+        const x = dirs.length
+          ? lastPlatformX + dir * stepMagnitude
+          : ((((lastPlatformX + dir * stepMagnitude + maxAllowedX) %
+              (maxAllowedX * 2)) +
+              maxAllowedX * 2) %
+              (maxAllowedX * 2)) -
+            maxAllowedX;
+        lastPlatformX = x;
+
+        // Determine platform type: normal, moving glider, or single-bounce fragile sandstone
+        const movingChance = Math.min(0.46, 0.14 + difficultyFactor * 0.32);
+        const fragileChance =
+          highestSpawnedY > 24
+            ? Math.min(0.2, 0.06 + difficultyFactor * 0.14)
+            : 0;
+        const roll = Math.random();
+
+        let type = "normal";
+        if (highestSpawnedY > 6 && roll < movingChance) {
+          type = "moving";
+        } else if (roll < movingChance + fragileChance) {
+          type = "fragile";
+        }
+
+        const hasSpring = type !== "fragile" && Math.random() < 0.14;
+        const scaleWidth = Math.max(0.82, 1.0 - difficultyFactor * 0.18);
+
+        const newPlatform = createPlatform(
+          x,
+          highestSpawnedY,
+          type,
+          hasSpring,
+          scaleWidth,
+        );
+        if (type === "moving")
+          newPlatform.vx =
+            (previousPlatformX < x ? -1 : 1) * Math.abs(newPlatform.vx);
+
+        platformSpawnIndex += 1;
+        const canHeart =
+          !hasSpring &&
+          highestSpawnedY >= HEART_MIN_HEIGHT &&
+          platformSpawnIndex - lastHeartSpawnIndex >= HEART_MIN_PLATFORM_GAP;
+        const spawnHeart = canHeart && Math.random() < HEART_SPAWN_CHANCE;
+        if (spawnHeart) {
+          createHeart(x, highestSpawnedY + 0.98);
+          lastHeartSpawnIndex = platformSpawnIndex;
+        } else if (!hasSpring && Math.random() < SCORE_ORB_SPAWN_CHANCE)
+          createScoreOrb(x, highestSpawnedY + 0.98);
+      }
+
+      /**********************************************************************
+       * 8. INPUT HANDLING (Keyboard, Touch Buttons, and 3D Character Spin)
+       **********************************************************************/
+      const keys = { left: false, right: false };
+      let isDraggingCharacter = false;
+      let lastPointerX = 0;
+      let menuCharacterYaw = 0.35;
+
+      window.addEventListener("keydown", (e) => {
+        if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = true;
+        if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
+        if (e.code === "Space" && gameState === "GAMEOVER") {
+          e.preventDefault();
+          startNewGame();
+        }
+      });
+
+      window.addEventListener("keyup", (e) => {
+        if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = false;
+        if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
+      });
+
+      const steeringPointers = new Map();
+      function updatePointerSteer() {
+        pointerSteer = THREE.MathUtils.clamp(
+          [...steeringPointers.values()].reduce(
+            (sum, direction) => sum + direction,
+            0,
+          ),
+          -1,
+          1,
+        );
+      }
+      window.addEventListener(
+        "pointerdown",
+        (e) => {
+          if (
+            gameState !== "PLAYING" ||
+            e.target.closest("button, input, select, a")
+          )
+            return;
+          if (e.pointerType === "touch") sfx.init();
+          steeringPointers.set(
+            e.pointerId,
+            e.clientX < window.innerWidth / 2 ? -1 : 1,
+          );
+          updatePointerSteer();
+        },
+        { passive: true },
+      );
+      window.addEventListener(
+        "pointermove",
+        (e) => {
+          if (!steeringPointers.has(e.pointerId)) return;
+          if (
+            e.clientX < 0 ||
+            e.clientX > window.innerWidth ||
+            e.clientY < 0 ||
+            e.clientY > window.innerHeight
+          )
+            steeringPointers.delete(e.pointerId);
+          else
+            steeringPointers.set(
+              e.pointerId,
+              e.clientX < window.innerWidth / 2 ? -1 : 1,
+            );
+          updatePointerSteer();
+        },
+        { passive: true },
+      );
+      const endSteeringPointer = (e) => {
+        steeringPointers.delete(e.pointerId);
+        updatePointerSteer();
+      };
+      window.addEventListener("pointerup", endSteeringPointer);
+      window.addEventListener("pointercancel", endSteeringPointer);
+      window.addEventListener("blur", () => {
+        steeringPointers.clear();
+        updatePointerSteer();
+      });
+
+      // Touch buttons
+      const btnTouchLeft = document.getElementById("btn-touch-left");
+      const btnTouchRight = document.getElementById("btn-touch-right");
+
+      function bindHoldButton(btn, keyName) {
+        if (!btn) return;
+        const start = (e) => {
+          e.preventDefault();
+          keys[keyName] = true;
+        };
+        const end = (e) => {
+          e.preventDefault();
+          keys[keyName] = false;
+        };
+        btn.addEventListener("pointerdown", start);
+        btn.addEventListener("pointerup", end);
+        btn.addEventListener("pointerleave", end);
+        btn.addEventListener("pointercancel", end);
+      }
+      bindHoldButton(btnTouchLeft, "left");
+      bindHoldButton(btnTouchRight, "right");
+
+      // Drag to spin character on the Menu screen
+      window.addEventListener("pointerdown", (e) => {
+        if (gameState !== "MENU") return;
+        if (e.target.closest("button, select, input, a")) return;
+        isDraggingCharacter = true;
+        lastPointerX = e.clientX;
+      });
+
+      window.addEventListener("pointermove", (e) => {
+        if (!isDraggingCharacter || gameState !== "MENU") return;
+        const dx = e.clientX - lastPointerX;
+        lastPointerX = e.clientX;
+        menuCharacterYaw += dx * 0.012;
+      });
+
+      window.addEventListener("pointerup", () => {
+        isDraggingCharacter = false;
+      });
+
+      /**********************************************************************
+       * 9. UI & HUD SYNCHRONIZATION
+       **********************************************************************/
+      const menuScreen = document.getElementById("menu-screen");
+      const gameoverScreen = document.getElementById("gameover-screen");
+      const touchControls = document.getElementById("touch-controls");
+      const hudScorePanel = document.getElementById("hud-score-panel");
+      const hudLiveScore = document.getElementById("hud-live-score");
+      const hudLiveHearts = document.getElementById("hud-live-hearts");
+      const hudPlayerName = document.getElementById("hud-player-name");
+      const hudAuthTag = document.getElementById("hud-auth-tag");
+      const hudBestScore = document.getElementById("hud-best-score");
+      const playerSwatch = document.getElementById("player-swatch");
+      const btnBackMenu = document.getElementById("btn-back-menu");
+
+      const authGreeting = document.getElementById("auth-greeting");
+      const authSubtext = document.getElementById("auth-subtext");
+      const btnSignInStartNg = document.getElementById("btn-signin-startng");
+      const btnPlayGame = document.getElementById("btn-play-game");
+      const btnPlayLabel = document.getElementById("btn-play-label");
+
+      const dotPrimary = document.getElementById("dot-primary");
+      const dotSecondary = document.getElementById("dot-secondary");
+      const dotSkin = document.getElementById("dot-skin");
+      const stylePillHat = document.getElementById("style-pill-hat");
+      const stylePillAccessory = document.getElementById(
+        "style-pill-accessory",
+      );
+
+      function syncCharacterAndAuthUI() {
+        const user = currentUser;
+        const style = normalizeStyle(user?.style || activeStyle);
+        activeStyle = style;
+
+        // Update 3D character mesh
+        playerMesh.userData.applyStyle(style);
+
+        // Update style pills & swatches
+        playerSwatch.style.background = style.primaryColor;
+        dotPrimary.style.background = style.primaryColor;
+        dotSecondary.style.background = style.secondaryColor;
+        dotSkin.style.background = style.skinColor;
+        stylePillHat.textContent = `Hat: ${style.hat}`;
+        stylePillAccessory.textContent = `Acc: ${style.accessory}`;
+
+        // Sync wardrobe inputs so they reflect current look
+        document.getElementById("demo-hat").value = style.hat;
+        document.getElementById("demo-accessory").value = style.accessory;
+        document.getElementById("demo-primary").value = style.primaryColor;
+        document.getElementById("demo-secondary").value = style.secondaryColor;
+        document.getElementById("demo-skin").value = style.skinColor;
+
+        // Best score for active user ID
+        const best = getPersonalBest(user?.id || "guest");
+        hudBestScore.textContent = best.toLocaleString();
+
+        if (user && user.name) {
+          // Signed in state
+          hudPlayerName.textContent = user.name;
+          hudAuthTag.textContent = "Verified";
+          hudAuthTag.className =
+            "text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 font-semibold";
+
+          authGreeting.textContent = `Welcome back, ${user.name}! 👋`;
+          authSubtext.textContent =
+            "Your custom character style is equipped and ready for take-off.";
+          btnSignInStartNg.classList.add("hidden");
+          btnPlayLabel.textContent = `Play as ${user.name}`;
+        } else if (START_NG !== null) {
+          // Not signed in, on a valid start.ng / start.localhost domain
+          hudPlayerName.textContent = "Guest";
+          hudAuthTag.textContent = "Guest";
+          hudAuthTag.className =
+            "text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-300 font-medium";
+
+          authGreeting.textContent = "Ready to Hop?";
+          authSubtext.textContent =
+            "Sign in with start.ng to load your custom character look and track your personal records, or jump right in as a guest.";
+          btnSignInStartNg.classList.remove("hidden");
+          btnPlayLabel.textContent = "Play as guest";
+        } else {
+          // START_NG is null -> Guest only mode with short player-friendly note
+          hudPlayerName.textContent = "Guest";
+          hudAuthTag.textContent = "Guest";
+          hudAuthTag.className =
+            "text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-300 font-medium";
+
+          authGreeting.textContent = "Playing as Guest";
+          authSubtext.textContent =
+            "start.ng sign-in isn't available here — customize your outfit below and jump right in!";
+          btnSignInStartNg.classList.add("hidden");
+          btnPlayLabel.textContent = "Play as guest";
+        }
+
+        renderLeaderboardLists();
+      }
+
+      function renderLeaderboardLists() {
+        const board = getLeaderboard();
+        const currentId = currentUser?.id || "guest";
+
+        const renderInto = (container, limit = 6) => {
+          if (!container) return;
+          container.innerHTML = "";
+
+          if (board.length === 0) {
+            container.innerHTML = `
+            <div class="text-center py-5 text-xs text-slate-400 bg-slate-900/40 rounded-2xl border border-white/5">
+              No sky runs recorded yet. Hop in to claim #1!
+            </div>
+          `;
+            return;
+          }
+
+          board.slice(0, limit).forEach((entry, idx) => {
+            const isMe = entry.id === currentId;
+            const medal =
+              idx === 0
+                ? "🥇"
+                : idx === 1
+                  ? "🥈"
+                  : idx === 2
+                    ? "🥉"
+                    : `#${idx + 1}`;
+            const row = document.createElement("div");
+            row.className = `flex items-center justify-between px-3 py-2 rounded-xl border text-xs ${
+              isMe
+                ? "bg-sky-500/20 border-sky-400/40 text-white"
+                : "bg-slate-900/60 border-white/5 text-slate-200"
+            }`;
+
+            const swatchColor = entry.style?.primaryColor || "#ff6b6b";
+
+            row.innerHTML = `
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-display font-bold w-6 text-center">${medal}</span>
+              <span class="w-2.5 h-2.5 rounded-full shrink-0 border border-white/30" style="background:${swatchColor}"></span>
+              <span class="font-semibold truncate">${escapeHtml(entry.name || "Guest")}</span>
+              ${isMe ? '<span class="text-[10px] px-1.5 py-0.2 rounded bg-sky-400/20 text-sky-300">You</span>' : ""}
+            </div>
+            <span class="font-display font-bold text-amber-300 ml-2">${Number(entry.score).toLocaleString()}</span>
+          `;
+            container.appendChild(row);
+          });
+        };
+
+        renderInto(document.getElementById("leaderboard-list"), 6);
+        renderInto(document.getElementById("gameover-leaderboard"), 4);
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(
+          /[&<>"']/g,
+          (ch) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[ch],
+        );
+      }
+
+      function updateUIOverlays() {
+        if (gameState === "MENU") {
+          menuScreen.classList.remove("hidden");
+          gameoverScreen.classList.add("hidden");
+          touchControls.classList.add("hidden");
+          hudScorePanel.classList.add("hidden");
+          btnBackMenu.classList.add("hidden");
+        } else if (gameState === "PLAYING") {
+          menuScreen.classList.add("hidden");
+          gameoverScreen.classList.add("hidden");
+          touchControls.classList.remove("hidden");
+          hudScorePanel.classList.remove("hidden");
+          btnBackMenu.classList.remove("hidden");
+        } else if (gameState === "GAMEOVER") {
+          menuScreen.classList.add("hidden");
+          gameoverScreen.classList.remove("hidden");
+          touchControls.classList.add("hidden");
+          hudScorePanel.classList.add("hidden");
+          btnBackMenu.classList.add("hidden");
+        }
+      }
+
+      function triggerGameOver() {
+        if (gameState !== "PLAYING") return;
+        gameState = "GAMEOVER";
+        keys.left = false;
+        keys.right = false;
+        pointerSteer = 0;
+        sfx.playGameOver();
+
+        const { isNewBest, bestScore } = saveScore(currentUser, score);
+
+        document.getElementById("gameover-score").textContent =
+          score.toLocaleString();
+        document.getElementById("gameover-best").textContent =
+          bestScore.toLocaleString();
+        document.getElementById("gameover-player-line").textContent =
+          `Piloted by ${currentUser?.name || "Guest"} • ❤️ ${totalHeartsCollected} heart${totalHeartsCollected === 1 ? "" : "s"} collected`;
+
+        const banner = document.getElementById("new-record-banner");
+        if (isNewBest && score > 0) {
+          banner.classList.remove("hidden");
+        } else {
+          banner.classList.add("hidden");
+        }
+
+        hudBestScore.textContent = bestScore.toLocaleString();
+        renderLeaderboardLists();
+        updateUIOverlays();
+      }
+
+      /**********************************************************************
+       * 10. UI EVENT LISTENERS
+       **********************************************************************/
+      btnSignInStartNg.addEventListener("click", () => {
+        signIn();
+      });
+
+      btnPlayGame.addEventListener("click", () => {
+        startNewGame();
+      });
+
+      document
+        .getElementById("btn-play-again")
+        .addEventListener("click", () => {
+          startNewGame();
+        });
+
+      document
+        .getElementById("btn-gameover-menu")
+        .addEventListener("click", () => {
+          gameState = "MENU";
+          resetWorldForMenu();
+          updateUIOverlays();
+        });
+
+      btnBackMenu.addEventListener("click", () => {
+        gameState = "MENU";
+        resetWorldForMenu();
+        updateUIOverlays();
+      });
+
+      document
+        .getElementById("btn-clear-scores")
+        .addEventListener("click", () => {
+          try {
+            localStorage.removeItem(LEADERBOARD_STORAGE_KEY);
+            localStorage.removeItem(
+              getBestScoreKey(currentUser?.id || "guest"),
+            );
+          } catch {}
+          syncCharacterAndAuthUI();
+        });
+
+      // Sound toggle
+      document.getElementById("btn-sound").addEventListener("click", () => {
+        sfx.muted = !sfx.muted;
+        document
+          .getElementById("icon-sound-on")
+          .classList.toggle("hidden", sfx.muted);
+        document
+          .getElementById("icon-sound-off")
+          .classList.toggle("hidden", !sfx.muted);
+      });
+
+      // How to Play Modal
+      const howToPlayModal = document.getElementById("howtoplay-modal");
+      document.getElementById("btn-howtoplay").addEventListener("click", () => {
+        howToPlayModal.classList.remove("hidden");
+      });
+      document
+        .getElementById("btn-close-howtoplay")
+        .addEventListener("click", () => {
+          howToPlayModal.classList.add("hidden");
+        });
+      howToPlayModal.addEventListener("click", (e) => {
+        if (e.target === howToPlayModal) howToPlayModal.classList.add("hidden");
+      });
+
+      // Wardrobe Customization Drawer
+      const demoDrawer = document.getElementById("demo-drawer");
+      const demoChevron = document.getElementById("demo-chevron");
+      document
+        .getElementById("btn-toggle-demo")
+        .addEventListener("click", () => {
+          const isHidden = demoDrawer.classList.toggle("hidden");
+          demoChevron.style.transform = isHidden
+            ? "rotate(0deg)"
+            : "rotate(180deg)";
+        });
+
+      function applyWardrobeInputs() {
+        const customStyle = {
+          hat: document.getElementById("demo-hat").value,
+          accessory: document.getElementById("demo-accessory").value,
+          primaryColor: document.getElementById("demo-primary").value,
+          secondaryColor: document.getElementById("demo-secondary").value,
+          skinColor: document.getElementById("demo-skin").value,
+        };
+        activeStyle = normalizeStyle(customStyle);
+        if (currentUser) {
+          currentUser = { ...currentUser, style: activeStyle };
+        }
+        syncCharacterAndAuthUI();
+      }
+
+      [
+        "demo-hat",
+        "demo-accessory",
+        "demo-primary",
+        "demo-secondary",
+        "demo-skin",
+      ].forEach((id) => {
+        document
+          .getElementById(id)
+          .addEventListener("input", applyWardrobeInputs);
+      });
+
+      // Subscribe to start.ng user changes
+      onUserChange(() => {
+        if (!currentUser) {
+          activeStyle = { ...DEFAULT_STYLE };
+        }
+        syncCharacterAndAuthUI();
+      });
+
+      /**********************************************************************
+       * 11. MAIN ANIMATION & GAME LOOP
+       **********************************************************************/
+      const clock = new THREE.Clock();
+      document.addEventListener("visibilitychange", () => {
+        lastTime = performance.now();
+        if (document.visibilityState === "visible") {
+          sfx.init();
+          clock.getDelta();
+        } else {
+          keys.left = false;
+          keys.right = false;
+          steeringPointers.clear();
+          updatePointerSteer();
+        }
+      });
+
+      function animateCharacterLimbs(dt, time) {
+        const {
+          bodyGroup,
+          headGroup,
+          leftArmPivot,
+          rightArmPivot,
+          leftLegPivot,
+          rightLegPivot,
+          scarfTail,
+        } = playerMesh.userData;
+
+        // Squash & stretch recovery
+        player.squash = THREE.MathUtils.lerp(
+          player.squash,
+          0,
+          Math.min(1, dt * 10),
+        );
+        const scaleY = 1 + player.squash * 0.35;
+        const scaleXZ = 1 / Math.sqrt(scaleY);
+        bodyGroup.scale.set(scaleXZ, scaleY, scaleXZ);
+
+        if (gameState === "MENU") {
+          // Gentle idle bob and wave on menu pedestal
+          bodyGroup.position.y = Math.sin(time * 3.2) * 0.05;
+          leftArmPivot.rotation.z = 0.18 + Math.sin(time * 3.2) * 0.08;
+          rightArmPivot.rotation.z = -0.18 - Math.sin(time * 3.2) * 0.08;
+          leftLegPivot.rotation.x = 0;
+          rightLegPivot.rotation.x = 0;
+          headGroup.rotation.z = Math.sin(time * 1.6) * 0.05;
+        } else {
+          bodyGroup.position.y = 0;
+          // Raise arms when soaring up, balance when descending
+          const vyNorm = THREE.MathUtils.clamp(
+            player.vy / JUMP_VELOCITY,
+            -1,
+            1.4,
+          );
+          const armAngle = THREE.MathUtils.mapLinear(
+            vyNorm,
+            -1,
+            1.4,
+            0.35,
+            2.3,
+          );
+          leftArmPivot.rotation.z = armAngle;
+          rightArmPivot.rotation.z = -armAngle;
+
+          leftLegPivot.rotation.x = vyNorm * 0.35;
+          rightLegPivot.rotation.x = -vyNorm * 0.25;
+          headGroup.rotation.z = -player.vx * 0.025;
+        }
+
+        if (scarfTail) {
+          scarfTail.rotation.x = 0.2 + Math.sin(time * 10) * 0.15;
+        }
+      }
+
+      function updateGameplay(dt, time) {
+        if (gameState !== "PLAYING") return;
+
+        // 1. Horizontal steering
+        let moveDir = pointerSteer;
+        if (keys.left) moveDir -= 1;
+        if (keys.right) moveDir += 1;
+        moveDir = THREE.MathUtils.clamp(moveDir, -1, 1);
+
+        const targetVx = moveDir * MOVE_SPEED;
+        player.vx = THREE.MathUtils.lerp(
+          player.vx,
+          targetVx,
+          Math.min(1, dt * 12),
+        );
+        player.x += player.vx * dt;
+
+        // Wrap around horizontal screen edges smoothly
+        if (player.x > WORLD_HALF_WIDTH) player.x = -WORLD_HALF_WIDTH;
+        if (player.x < -WORLD_HALF_WIDTH) player.x = WORLD_HALF_WIDTH;
+
+        // Rotate character slightly toward movement direction
+        if (moveDir !== 0) {
+          player.facing = moveDir * 0.45;
+        } else {
+          player.facing = THREE.MathUtils.lerp(player.facing, 0, dt * 6);
+        }
+
+        // 2. Vertical gravity & movement
+        const prevY = player.y;
+        player.vy += GRAVITY * dt;
+        player.y += player.vy * dt;
+
+        // 3. Platform updates & landing detection (only when falling: vy <= 0)
+        for (let i = platforms.length - 1; i >= 0; i--) {
+          const p = platforms[i];
+
+          // Move horizontal glider platforms
+          if (p.type === "moving") {
+            p.x += p.vx * dt;
+            if (p.x > WORLD_HALF_WIDTH - p.width * 0.5) {
+              p.x = WORLD_HALF_WIDTH - p.width * 0.5;
+              p.vx *= -1;
+            } else if (p.x < -WORLD_HALF_WIDTH + p.width * 0.5) {
+              p.x = -WORLD_HALF_WIDTH + p.width * 0.5;
+              p.vx *= -1;
+            }
+            p.group.position.x = p.x;
+          }
+
+          // Recover platform bounce animation
+          if (p.bounceAnim > 0) {
+            p.bounceAnim = Math.max(0, p.bounceAnim - dt * 4);
+            p.group.position.y = p.y - Math.sin(p.bounceAnim * Math.PI) * 0.22;
+          }
+
+          // Check collision if player is descending across platform top plane
+          if (player.vy <= 0 && !p.broken) {
+            const halfW = p.width * 0.5 + 0.3;
+            const withinX = Math.abs(player.x - p.x) <= halfW;
+            const crossedY = prevY >= p.y - 0.18 && player.y <= p.y + 0.22;
+
+            if (withinX && crossedY) {
+              player.y = p.y;
+              p.bounceAnim = 1.0;
+
+              if (p.type === "moving") {
+                const nextPlatform = platforms.find(
+                  (candidate) => candidate.y > p.y + 0.1,
+                );
+                if (nextPlatform)
+                  p.vx = Math.sign(nextPlatform.x - p.x || 1) * Math.abs(p.vx);
+              }
+
+              if (p.hasSpring) {
+                player.vy = SPRING_VELOCITY;
+                player.squash = 0.65;
+                player.spinTimer = 0.65;
+                sfx.playJump(true);
+                spawnParticles(player.x, player.y + 0.2, 0, 0xfbbf24, 14);
+                showFloatingPopup(
+                  new THREE.Vector3(player.x, player.y + 1, 0),
+                  "🚀 SPRING BOOST!",
+                  "text-amber-300",
+                );
+              } else if (p.type === "fragile") {
+                // Single-bounce cracked sandstone island shatters on jump!
+                player.vy = JUMP_VELOCITY;
+                player.squash = 0.42;
+                p.broken = true;
+                sfx.playCrack();
+                spawnParticles(p.x, p.y, 0, 0xfb923c, 14);
+                platformsGroup.remove(p.group);
+                platforms.splice(i, 1);
+              } else {
+                player.vy = JUMP_VELOCITY;
+                player.squash = 0.42;
+                sfx.playJump(false);
+                spawnParticles(player.x, player.y, 0, 0x34d399, 7);
+              }
+              break;
+            }
+          }
+
+          // Remove platforms far below the camera
+          if (p.y < cameraMinY - 10) {
+            platformsGroup.remove(p.group);
+            platforms.splice(i, 1);
+          }
+        }
+
+        // 4. Collectible 3D Hearts update (+1 revive heart)
+        for (let i = heartItems.length - 1; i >= 0; i--) {
+          const h = heartItems[i];
+          h.mesh.rotation.y = time * 2.8;
+          h.mesh.position.y = h.y + Math.sin(time * 4 + h.x) * 0.14;
+
+          if (!h.collected) {
+            const dx = player.x - h.x;
+            const dy = player.y + 0.9 - h.y;
+            if (dx * dx + dy * dy < 1.2) {
+              h.collected = true;
+              const addedHeart = hearts < MAX_HEARTS;
+              hearts = Math.min(MAX_HEARTS, hearts + 1);
+              totalHeartsCollected += 1;
+              pulseHeartsHUD();
+              sfx.playHeart();
+              spawnParticles(h.x, h.y, 0, 0xf43f5e, 16);
+              showFloatingPopup(
+                new THREE.Vector3(h.x, h.y + 0.3, 0),
+                addedHeart ? "+1 ❤️ Revive" : "❤️ Hearts Full",
+                "text-rose-400",
+                `Held: ${hearts}/${MAX_HEARTS}`,
+              );
+              heartsGroup.remove(h.mesh);
+              heartItems.splice(i, 1);
+              continue;
+            }
+          }
+
+          if (h.y < cameraMinY - 10) {
+            heartsGroup.remove(h.mesh);
+            heartItems.splice(i, 1);
+          }
+        }
+
+        for (let i = scoreOrbs.length - 1; i >= 0; i--) {
+          const orb = scoreOrbs[i];
+          orb.mesh.rotation.y = time * 2.8;
+          orb.mesh.rotation.x = Math.sin(time * 1.7) * 0.18;
+          orb.mesh.position.y = orb.y + Math.sin(time * 4 + orb.x) * 0.14;
+          if (!orb.collected) {
+            const dx = player.x - orb.x;
+            const dy = player.y + 0.9 - orb.y;
+            if (dx * dx + dy * dy < 1.2) {
+              orb.collected = true;
+              const value = rollScoreOrbValue();
+              bonusPoints += value;
+              const rare = value >= SCORE_ORB_RARE_THRESHOLD;
+              sfx.playScoreOrb(rare);
+              spawnParticles(
+                orb.x,
+                orb.y,
+                0,
+                0xfbbf24,
+                rare ? RARE_ORB_PARTICLES : SCORE_ORB_PARTICLES,
+              );
+              showFloatingPopup(
+                new THREE.Vector3(orb.x, orb.y + 0.3, 0),
+                `+${value}`,
+                rare ? "text-amber-200" : "text-amber-300",
+              );
+              const popup = popupLayer.lastElementChild?.firstElementChild;
+              if (rare && popup) {
+                popup.style.fontSize = "2rem";
+                popup.style.textShadow =
+                  "0 0 18px #fbbf24, 0 3px 10px rgba(0,0,0,.6)";
+              }
+              scoreOrbsGroup.remove(orb.mesh);
+              scoreOrbs.splice(i, 1);
+              if (navigator.vibrate)
+                navigator.vibrate(rare ? [35, 25, 55] : 20);
+              continue;
+            }
+          }
+          if (orb.y < cameraMinY - 10) {
+            scoreOrbsGroup.remove(orb.mesh);
+            scoreOrbs.splice(i, 1);
+          }
+        }
+
+        // 5. Track altitude & spawn new platforms ahead
+        // Only lock the camera floor upward once the player has climbed past the starter zone (y > 4.2)
+        if (player.y > maxPlayerY) {
+          maxPlayerY = player.y;
+        }
+        cameraMinY = maxPlayerY > 4.2 ? Math.max(0, maxPlayerY - 2.2) : 0;
+
+        // Starter zone safety bounce: if the player hasn't climbed past the opening platforms yet
+        // (e.g., still adjusting hands after clicking "Hop Again"), bounce safely at y = 0 instead of dying
+        if (maxPlayerY < 4.5 && player.vy < 0 && player.y <= 0) {
+          player.y = 0;
+          player.vy = JUMP_VELOCITY;
+          player.squash = 0.42;
+          sfx.playJump(false);
+          spawnParticles(player.x, 0, 0, 0x34d399, 6);
+        }
+
+        while (
+          highestSpawnedY <
+          cameraCurrentY +
+            camera.position.z *
+              Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) *
+              SPAWN_AHEAD_VIEWPORT_FACTOR
+        ) {
+          spawnNextPlatform();
+        }
+
+        score = Math.floor(maxPlayerY * 10) + bonusPoints;
+        hudLiveScore.textContent = score.toLocaleString();
+
+        // 6. Smooth upward camera tracking
+        const targetCamY = Math.max(3.5, maxPlayerY + 1.5);
+        cameraCurrentY = THREE.MathUtils.lerp(
+          cameraCurrentY,
+          targetCamY,
+          Math.min(1, dt * 6),
+        );
+        camera.position.x = 0;
+        camera.position.y = cameraCurrentY;
+        camera.lookAt(0, cameraCurrentY - 1.5, 0);
+
+        // Update directional light to follow altitude
+        dirLight.position.y = cameraCurrentY + 15;
+
+        // Apply player mesh position & celebratory flip on spring/revive boost
+        playerMesh.position.set(player.x, player.y, 0);
+        if (player.spinTimer > 0) {
+          player.spinTimer = Math.max(0, player.spinTimer - dt);
+          playerMesh.rotation.x = (1 - player.spinTimer / 0.65) * Math.PI * 2;
+        } else {
+          playerMesh.rotation.x = 0;
+        }
+        playerMesh.rotation.y = THREE.MathUtils.lerp(
+          playerMesh.rotation.y,
+          player.facing,
+          Math.min(1, dt * 10),
+        );
+
+        // 7. Check Fall condition: Revive immediately if player has a Heart, otherwise Game Over!
+        if (player.y < cameraMinY - 6.5) {
+          if (hearts > 0) {
+            // Consume 1 Heart for an immediate mid-air Rescue Boost
+            hearts -= 1;
+            pulseHeartsHUD();
+            sfx.playRevive();
+
+            const rescueY = cameraMinY + 0.6;
+            createPlatform(player.x, rescueY, "normal", false, 1.25);
+
+            player.y = rescueY + 0.15;
+            player.vy = SPRING_VELOCITY * 1.05;
+            player.squash = 0.68;
+            player.spinTimer = 0.65;
+            playerMesh.position.set(player.x, player.y, 0);
+
+            spawnParticles(player.x, player.y, 0, 0xf43f5e, 18);
+            spawnParticles(player.x, player.y, 0, 0xfbbf24, 12);
+            showFloatingPopup(
+              new THREE.Vector3(player.x, player.y + 1.2, 0),
+              "❤️ REVIVED!",
+              "text-rose-400",
+              "-1 Heart • Rescue Boost!",
+            );
+          } else {
+            triggerGameOver();
+          }
+        }
+      }
+
+      function updateParticlesAndClouds(dt) {
+        // Clouds recycle upward as camera climbs
+        for (const c of backgroundClouds) {
+          c.mesh.position.x += c.speed * dt;
+          if (c.mesh.position.x > 16) c.mesh.position.x = -16;
+          if (c.mesh.position.x < -16) c.mesh.position.x = 16;
+
+          if (c.mesh.position.y < camera.position.y - 14) {
+            c.mesh.position.y = camera.position.y + 22 + Math.random() * 6;
+          }
+        }
+
+        // Update 3D burst particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.life -= dt * 1.8;
+          if (p.life <= 0) {
+            particlesGroup.remove(p.mesh);
+            particles.splice(i, 1);
+            continue;
+          }
+          p.vy += GRAVITY * 0.5 * dt;
+          p.mesh.position.x += p.vx * dt;
+          p.mesh.position.y += p.vy * dt;
+          p.mesh.position.z += p.vz * dt;
+          p.mesh.scale.setScalar(p.life);
+        }
+      }
+
+      function gameLoop() {
+        requestAnimationFrame(gameLoop);
+
+        const now = performance.now();
+        const rawDt =
+          document.visibilityState === "visible" ? (now - lastTime) / 1000 : 0;
+        lastTime = now;
+        const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+        const elapsed = clock.getElapsedTime();
+
+        if (gameState === "MENU") {
+          // Slowly rotate character on the starting platform so hat, glasses, scarf, backpack & colors are visible
+          if (!isDraggingCharacter) {
+            menuCharacterYaw += dt * 0.65;
+          }
+          playerMesh.rotation.y = menuCharacterYaw;
+          playerMesh.rotation.x = 0;
+
+          // Float decorative menu heart
+          heartItems.forEach((h) => {
+            h.mesh.rotation.y = elapsed * 2.2;
+          });
+        } else if (gameState === "PLAYING") {
+          updateGameplay(dt, elapsed);
+        }
+
+        animateCharacterLimbs(dt, elapsed);
+        updateParticlesAndClouds(dt);
+        renderer.render(scene, camera);
+      }
+
+      // Keep the complete fixed playfield visible at every aspect ratio.
+      function resizeGameView() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.fov = CAMERA_FOV;
+        camera.position.z = Math.max(
+          12,
+          (WORLD_HALF_WIDTH * CAMERA_WIDTH_PADDING) /
+            (Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) *
+              camera.aspect),
+        );
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        if (gameState === "PLAYING") {
+          camera.position.x = 0;
+          camera.position.y = cameraCurrentY;
+          camera.lookAt(0, cameraCurrentY - 1.5, 0);
+        }
+      }
+      window.addEventListener("resize", resizeGameView);
+      window.addEventListener("orientationchange", resizeGameView);
+      resizeGameView();
+
+      // Boot application on window load
+      window.onload = async function () {
+        resetWorldForMenu();
+        syncCharacterAndAuthUI();
+        updateUIOverlays();
+        gameLoop();
+
+        // Check start.ng session if running on .start.ng or .start.localhost
+        if (START_NG) {
+          await getCurrentUser();
+          syncCharacterAndAuthUI();
+        }
+      };
+    </script>
+  </body>
+</html>
