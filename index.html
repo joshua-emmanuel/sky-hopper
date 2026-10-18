@@ -1069,6 +1069,33 @@
         return iframeReadyPromise;
       }
 
+      // Send a request through start.ng's documented connect bridge and wait
+      // for the matching reply. Each request is correlated so concurrent board
+      // refreshes and score saves cannot consume one another's responses.
+      async function askStartNg(message, replyType, timeoutMs = 5000) {
+        const iframe = await ensureConnectIframe();
+        if (!iframe?.contentWindow) return null;
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        return new Promise((resolve) => {
+          const timer = setTimeout(() => done(null), timeoutMs);
+          function done(reply) {
+            clearTimeout(timer);
+            window.removeEventListener("message", onMessage);
+            resolve(reply);
+          }
+          function onMessage(event) {
+            if (event.origin !== START_NG || event.source !== iframe.contentWindow) return;
+            if (event.data?.type === replyType && event.data.requestId === requestId) done(event.data);
+          }
+          window.addEventListener("message", onMessage);
+          try {
+            iframe.contentWindow.postMessage({ ...message, requestId }, START_NG);
+          } catch {
+            done(null);
+          }
+        });
+      }
+
       /**
        * Queries ${START_NG}/connect via postMessage with a 3-second timeout.
        * Resolves to:
@@ -1298,24 +1325,16 @@
           console.warn("Could not persist leaderboard to localStorage:", err);
         }
 
-        // Also notify the start.ng bridge iframe if connected (non-blocking)
-        if (
-          START_NG &&
-          connectIframe &&
-          connectIframe.contentWindow &&
-          cleanScore > 0
-        ) {
-          try {
-            connectIframe.contentWindow.postMessage(
-              {
-                type: "startng:score",
-                score: cleanScore,
-                bestScore: newBest,
-                userId,
-              },
-              START_NG,
-            );
-          } catch {}
+        // start.ng accepts whole-number scores and stores the shared best run.
+        // Submission is asynchronous; the local personal best still updates
+        // immediately so the game-over screen remains responsive.
+        if (START_NG && cleanScore > 0) {
+          askStartNg({ type: "startng:score", score: cleanScore }, "startng:scoreSaved")
+            .then((reply) => {
+              if (!reply?.ok) console.warn("start.ng score was not saved:", reply?.error || "No response");
+              refreshStartNgLeaderboard();
+            })
+            .catch((err) => console.warn("Could not submit score to start.ng:", err));
         }
 
         return { isNewBest, bestScore: newBest };
@@ -2754,24 +2773,28 @@
       }
 
       function renderLeaderboardLists() {
-        const board = getLeaderboard();
+        const board = START_NG ? startNgLeaderboard : getLeaderboard();
         const currentId = currentUser?.id || "guest";
 
         const renderInto = (container, limit = 6) => {
           if (!container) return;
           container.innerHTML = "";
 
+          if (board === null) {
+            container.innerHTML = `<div class="text-center py-5 text-xs text-slate-400 bg-slate-900/40 rounded-2xl border border-white/5">${startNgLeaderboardError ? "Could not load the start.ng leaderboard. Try again shortly." : "Loading start.ng leaderboard…"}</div>`;
+            return;
+          }
           if (board.length === 0) {
             container.innerHTML = `
             <div class="text-center py-5 text-xs text-slate-400 bg-slate-900/40 rounded-2xl border border-white/5">
-              No sky runs recorded yet. Hop in to claim #1!
+              ${START_NG ? "No shared scores yet. Be the first to set a record!" : "No sky runs recorded yet. Hop in to claim #1!"}
             </div>
           `;
             return;
           }
 
           board.slice(0, limit).forEach((entry, idx) => {
-            const isMe = entry.id === currentId;
+            const isMe = String(entry.player_id ?? entry.id) === String(currentId);
             const medal =
               idx === 0
                 ? "🥇"
@@ -2787,11 +2810,11 @@
                 : "bg-slate-900/60 border-white/5 text-slate-200"
             }`;
 
-            const swatchColor = entry.style?.primaryColor || "#ff6b6b";
+            const swatchColor = /^#[0-9a-f]{6}$/i.test(entry.color || "") ? entry.color : (entry.style?.primaryColor || "#ff6b6b");
 
             row.innerHTML = `
             <div class="flex items-center gap-2 min-w-0">
-              <span class="font-display font-bold w-6 text-center">${medal}</span>
+              <span class="font-display font-bold w-6 text-center">${entry.rank ? `#${entry.rank}` : medal}</span>
               <span class="w-2.5 h-2.5 rounded-full shrink-0 border border-white/30" style="background:${swatchColor}"></span>
               <span class="font-semibold truncate">${escapeHtml(entry.name || "Guest")}</span>
               ${isMe ? '<span class="text-[10px] px-1.5 py-0.2 rounded bg-sky-400/20 text-sky-300">You</span>' : ""}
@@ -2804,6 +2827,47 @@
 
         renderInto(document.getElementById("leaderboard-list"), 6);
         renderInto(document.getElementById("gameover-leaderboard"), 4);
+      }
+
+      let startNgLeaderboard = null;
+      let startNgLeaderboardError = false;
+      let leaderboardRequestInFlight = false;
+      let leaderboardRefreshQueued = false;
+      async function refreshStartNgLeaderboard() {
+        if (!START_NG) return;
+        if (leaderboardRequestInFlight) {
+          leaderboardRefreshQueued = true;
+          return;
+        }
+        leaderboardRequestInFlight = true;
+        try {
+          const reply = await askStartNg(
+            { type: "startng:leaderboard", limit: 10 },
+            "startng:leaderboardData",
+          );
+          if (reply?.ok && Array.isArray(reply.entries)) {
+            startNgLeaderboard = reply.entries;
+            startNgLeaderboardError = false;
+          } else if (reply) {
+            startNgLeaderboard = null;
+            startNgLeaderboardError = true;
+            console.warn("Could not load start.ng leaderboard:", reply.error || "Unknown error");
+          } else {
+            startNgLeaderboard = null;
+            startNgLeaderboardError = true;
+          }
+        } catch (err) {
+          startNgLeaderboard = null;
+          startNgLeaderboardError = true;
+          console.warn("Could not load start.ng leaderboard:", err);
+        } finally {
+          leaderboardRequestInFlight = false;
+          renderLeaderboardLists();
+          if (leaderboardRefreshQueued) {
+            leaderboardRefreshQueued = false;
+            refreshStartNgLeaderboard();
+          }
+        }
       }
 
       function escapeHtml(str) {
@@ -3433,6 +3497,7 @@
         if (START_NG) {
           await getCurrentUser();
           syncCharacterAndAuthUI();
+          await refreshStartNgLeaderboard();
         }
       };
     </script>
